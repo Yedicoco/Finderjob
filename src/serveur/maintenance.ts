@@ -4,6 +4,10 @@
  * Le statut affiché ne dépend PAS de ces tâches : la vue v_job_offers calcule
  * le statut effectif à la lecture. Ici, on se contente de l'inscrire en base
  * (pour l'historique) et de tenir les scores et la conservation à jour.
+ *
+ * Seule exception : le début de la recherche. La vue ne le connaît pas ; ce
+ * sont l'enregistrement, le changement du réglage et cette maintenance qui
+ * archivent les offres publiées avant lui (voir serveur/perimetre).
  */
 import { accord, compter } from '@/domaine/accord';
 import { rafraichirScores } from './appariements';
@@ -11,8 +15,10 @@ import { ACTEUR_SYSTEME, journaliser } from './audit';
 import { purgerSessions } from './auth';
 import { purgerCandidatsExpires } from './candidats';
 import { executer } from './db';
+import { alignerOffresSurDebutRecherche } from './parametres';
+import type { BilanPerimetre } from './perimetre';
 
-export type BilanMaintenance = { statutsFiges: number; scores: number; candidatsAnonymises: number; sessions: number; tracesPurgees: number };
+export type BilanMaintenance = { perimetre: BilanPerimetre; statutsFiges: number; scores: number; candidatsAnonymises: number; sessions: number; tracesPurgees: number };
 
 /** Inscrit en base les expirations que la vue constate déjà (offre trop ancienne, date dépassée, non revérifiée). */
 export async function figerStatuts(maintenant = new Date()): Promise<number> {
@@ -48,7 +54,10 @@ export async function purgerTraces(): Promise<number> {
 }
 
 export async function executerMaintenance(maintenant = new Date()): Promise<BilanMaintenance> {
+  // D'abord le début de la recherche : une offre reprise peut être expirée entre-temps, l'étape suivante l'inscrit.
+  const { ecartees, reprises } = await alignerOffresSurDebutRecherche({ maintenant });
   const bilan: BilanMaintenance = {
+    perimetre: { ecartees, reprises },
     statutsFiges: await figerStatuts(maintenant),
     scores: await rafraichirScores(undefined, maintenant),
     candidatsAnonymises: await purgerCandidatsExpires(ACTEUR_SYSTEME, maintenant),

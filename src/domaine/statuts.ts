@@ -22,7 +22,7 @@ export type StatutVerification = 'non_requise' | 'a_verifier' | 'verifiee' | 're
 
 const JOUR_MS = 86_400_000;
 /** Tolérance pour une date « dans le futur » (décalage horaire ou horloge de la source). */
-const TOLERANCE_FUTUR_MS = 2 * JOUR_MS;
+export const TOLERANCE_FUTUR_MS = 2 * JOUR_MS;
 
 export type DecisionStatut = {
   statut: StatutOffre;
@@ -55,7 +55,7 @@ export function statutInitial(entree: {
   if (publieLe.getTime() > maintenant.getTime() + TOLERANCE_FUTUR_MS) {
     return { statut: 'douteux', motif: 'date_incoherente', verification: 'a_verifier', revueHumaine: true };
   }
-  // 2. Périmètre : avant le 1er janvier 2026 → archivée, hors des résultats.
+  // 2. Périmètre : publiée avant le début de la recherche (paramètre) → archivée, hors des résultats.
   if (publieLe.getTime() < dateMin.getTime()) {
     return { statut: 'archive', motif: 'hors_perimetre_date', verification: 'non_requise', revueHumaine: false };
   }
@@ -81,6 +81,15 @@ export function statutInitial(entree: {
   const revue = Boolean(entree.revueDemandee) || !entree.villeConnue;
   return { statut: 'actif', motif: 'aucun', verification: revue ? 'a_verifier' : 'non_requise', revueHumaine: revue };
 }
+
+/**
+ * Motifs de statutInitial() qui disent que l'annonce n'a pas de date fiable
+ * dans la période de recherche (règles 1 et 2). Tout autre motif signifie
+ * qu'elle a été publiée dans la période. Sert aux doublons : une annonce de
+ * la période n'est jamais masquée par une annonce plus ancienne que le début
+ * de la recherche.
+ */
+export const MOTIFS_HORS_PERIODE: readonly MotifStatut[] = ['date_inconnue', 'date_incoherente', 'hors_perimetre_date'];
 
 export type EntreeStatutEffectif = {
   statut: StatutOffre;

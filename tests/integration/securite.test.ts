@@ -152,19 +152,27 @@ describe('paramètres', () => {
     expect((await chargerParametres()).salaires.seuilEleveMensuel).toBe(10_000);
   });
 
-  it('place la date de début du périmètre à minuit, heure du Maroc, et ne l’avance jamais avant 2026', async () => {
-    await definirParametre('perimetre.dateMin', '2026-02-15', monde.acteurAdmin);
-    expect(new Date((await chargerParametres()).perimetre.dateMin).toISOString()).toBe('2026-02-14T23:00:00.000Z');
+  it('place le début de la recherche à minuit, heure du Maroc, entre le 1er janvier 2026 et aujourd’hui', async () => {
+    const regler = (jour: string) => definirParametre('perimetre.dateMin', jour, monde.acteurAdmin, { maintenant: MAINTENANT });
+    const debut = async () => new Date((await chargerParametres()).perimetre.dateMin).toISOString();
+    await regler('2026-02-15');
+    expect(await debut()).toBe('2026-02-14T23:00:00.000Z');
     // Pendant le ramadan 2026, le Maroc était à UTC+0 : minuit à Casablanca valait minuit UTC.
-    await definirParametre('perimetre.dateMin', '2026-03-01', monde.acteurAdmin);
-    expect(new Date((await chargerParametres()).perimetre.dateMin).toISOString()).toBe('2026-03-01T00:00:00.000Z');
+    await regler('2026-03-01');
+    expect(await debut()).toBe('2026-03-01T00:00:00.000Z');
     // Depuis le 20 septembre 2026, le Maroc est à l'heure GMT toute l'année.
-    await definirParametre('perimetre.dateMin', '2026-10-01', monde.acteurAdmin);
-    expect(new Date((await chargerParametres()).perimetre.dateMin).toISOString()).toBe('2026-10-01T00:00:00.000Z');
-    await expect(definirParametre('perimetre.dateMin', '15/02/2026', monde.acteurAdmin)).rejects.toThrow('Date invalide.');
-    await expect(definirParametre('perimetre.dateMin', '2025-12-31', monde.acteurAdmin)).rejects.toThrow(/avant le 1er janvier 2026/);
-    await definirParametre('perimetre.dateMin', '2026-01-01', monde.acteurAdmin);
-    expect(new Date((await chargerParametres()).perimetre.dateMin).toISOString()).toBe('2025-12-31T23:00:00.000Z');
+    await regler('2026-10-01');
+    expect(await debut()).toBe('2026-10-01T00:00:00.000Z');
+    await expect(regler('15/02/2026')).rejects.toThrow('Date invalide.');
+    await expect(regler('2025-12-31')).rejects.toThrow(/avant le 1er janvier 2026/);
+    // Ni demain ni plus tard : toutes les offres, y compris celles du jour, seraient écartées.
+    await expect(regler('2026-11-11')).rejects.toThrow(/ne peut pas commencer dans le futur/);
+    expect(await debut()).toBe('2026-10-01T00:00:00.000Z');
+    // Aujourd'hui (le 10 novembre 2026 dans ces tests) est accepté : la recherche commence ce matin à 00 h 00.
+    await regler('2026-11-10');
+    expect(await debut()).toBe('2026-11-10T00:00:00.000Z');
+    await regler('2026-01-01');
+    expect(await debut()).toBe('2025-12-31T23:00:00.000Z');
   });
 
   it('refuse une clé inconnue et journalise chaque changement', async () => {

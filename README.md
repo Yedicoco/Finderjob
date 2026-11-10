@@ -1,9 +1,10 @@
 # Yallah Services — Job Radar
 
 Outil interne de **veille d'offres d'emploi et de placement** pour Yallah Services (Casablanca).
-Il rassemble les offres publiées **au Maroc depuis le 1er janvier 2026** dans trois secteurs — personnel de
-maison, beauté et bien-être, conciergerie et hospitalité —, les qualifie (source, date, statut, risque,
-doublons), puis aide les courtiers à rapprocher candidats et employeurs et à suivre placements et commissions.
+Il rassemble les offres publiées **au Maroc depuis le début de la recherche — le lundi 9 novembre 2026** — dans
+trois secteurs — personnel de maison, beauté et bien-être, conciergerie et hospitalité —, les qualifie (source,
+date, statut, risque, doublons), puis aide les courtiers à rapprocher candidats et employeurs et à suivre
+placements et commissions.
 
 L'outil est en français, réservé à l'équipe (connexion obligatoire), et ne publie rien.
 
@@ -45,7 +46,22 @@ identifiants locaux. **Sans la clé, les données chiffrées sont illisibles** :
 
 Administration › Jeu de démonstration charge 18 annonces, 8 candidats et 2 employeurs **inventés**, tous
 marqués « FICTIF ». Ils utilisent leur propre numérotation (`YS-DEMO-…`), ne sont jamais additionnés aux
-montants réels et se retirent en un clic.
+montants réels et se retirent en un clic. Les annonces sont datées entre le début de la recherche et le jour
+du chargement ; une seule, volontairement ancienne, montre une offre écartée.
+
+## Début de la recherche
+
+L'outil ne retient que les annonces publiées à partir d'une date : le **début de la recherche**, réglé sur le
+**lundi 9 novembre 2026 à 00 h 00** (heure de Casablanca). C'est une date fixe : elle n'avance pas d'elle-même.
+
+- **La changer** : Administration › Paramètres, par un administrateur. Elle se choisit entre le 1er janvier
+  2026 et le jour même, et s'applique aussitôt aux offres déjà enregistrées.
+- **Une annonce publiée plus tôt** est archivée avec le motif « Avant le début de la recherche ». Rien n'est
+  supprimé : si la date est reculée, l'offre revient avec le statut qu'elle aurait eu à l'enregistrement.
+- **Une annonce republiée** dans la période prend la place de sa première publication, plus ancienne que le
+  début de la recherche : c'est elle qui reste visible.
+- **Après une mise à jour**, les offres enregistrées sont alignées au démarrage. Une installation où un
+  administrateur a déjà enregistré cette date dans les paramètres garde la sienne.
 
 ## Ce que fait l'outil
 

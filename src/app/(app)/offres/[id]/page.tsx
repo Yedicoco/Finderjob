@@ -3,10 +3,11 @@ import Link from '@/composants/lien';
 import { notFound } from 'next/navigation';
 import { ListeCorrespondances } from '@/composants/correspondances';
 import { BoutonAction, BoutonEnvoi, Formulaire } from '@/composants/formulaire';
-import { dateCourte, dateHeure, dirhams, estArabe, ilYA, pluriel, salaire } from '@/composants/format';
+import { dateCourte, dateHeure, dateIso, dateLongue, dirhams, estArabe, ilYA, pluriel, salaire } from '@/composants/format';
 import { EtiquettesOffre, lieuOffre } from '@/composants/offres';
 import { OPTIONS_VILLES, SelectionMetier } from '@/composants/options';
 import { Badge, Carte, Champ, Definition, Definitions, EnTetePage, Encart, Jauge, LienBouton, LienExterne, Selection, TexteLibre } from '@/composants/ui';
+import { DEBUT_RECHERCHE_PLANCHER } from '@/domaine/parametres';
 import {
   AVERTISSEMENT_ENGAGEMENT,
   CONTRATS,
@@ -28,7 +29,7 @@ import type { Signal } from '@/domaine/risques';
 import type { LigneScore } from '@/domaine/scores';
 import { libelleMetier, libelleSecteur } from '@/domaine/taxonomie';
 import { listerCorrespondances } from '@/serveur/appariements';
-import { offreParId, type OffreDetaillee } from '@/serveur/offres';
+import { offreParId, sensRattachement, type OffreDetaillee } from '@/serveur/offres';
 import { chargerParametres } from '@/serveur/parametres';
 import { exigerPermission } from '@/serveur/session-next';
 import { chercherCandidatsPourOffre } from '../../appariements/actions';
@@ -46,14 +47,17 @@ const LIBELLES_CHAMPS: Record<string, string> = {
 };
 const ORIGINES: Record<string, string> = { collecte: 'Collecte', saisie: 'Saisie', moderation: 'Courtier', maintenance: 'Contrôle automatique', fusion_doublon: 'Doublon', creation: 'Création' };
 
-function explicationStatut(offre: OffreDetaillee, validite: number, reverification: number): { texte: string; quoiFaire?: string } | null {
+function explicationStatut(offre: OffreDetaillee, validite: number, reverification: number, debutRecherche: string): { texte: string; quoiFaire?: string } | null {
   switch (offre.effective_reason) {
     case 'date_inconnue':
-      return { texte: 'L’annonce n’indique aucune date de publication fiable : rien ne prouve qu’elle date de 2026.', quoiFaire: 'Retrouvez la date sur l’annonce d’origine, puis renseignez-la dans « Corriger ».' };
+      return { texte: 'L’annonce n’indique aucune date de publication fiable : rien ne prouve qu’elle est assez récente.', quoiFaire: 'Retrouvez la date sur l’annonce d’origine, puis renseignez-la dans « Corriger ».' };
     case 'date_incoherente':
       return { texte: 'La date de publication relevée est dans le futur.', quoiFaire: 'Corrigez la date de publication.' };
     case 'hors_perimetre_date':
-      return { texte: 'Publiée avant le 1er janvier 2026 : hors du périmètre de l’outil.' };
+      return {
+        texte: `Publiée avant le début de la recherche (${dateLongue(debutRecherche)}) : hors du périmètre de l’outil.`,
+        quoiFaire: 'Si la date relevée est fausse, rectifiez-la dans « Corriger ». Sinon, rien à faire : le début de la recherche se règle dans Administration › Paramètres (administrateur) et, s’il est reculé, cette offre est réévaluée d’elle-même.',
+      };
     case 'localisation_inconnue':
       return { texte: 'Le lieu de travail n’a pas pu être confirmé au Maroc.', quoiFaire: 'Si l’annonce précise une ville marocaine, renseignez-la dans « Corriger ».' };
     case 'expiree_source':
@@ -100,8 +104,18 @@ function LignesScore({ titre, lignes }: { titre: string; lignes: LigneScore[] | 
   );
 }
 
-const valeurVersion = (valeur: unknown): string => {
+/** Champs dont l'historique garde un code : on affiche son libellé (« Archivée », « Avant le début de la recherche »), pas le code. */
+const REFERENTIELS_VERSION: Record<string, { est: (valeur: unknown) => boolean; libelle: (code: string) => string }> = {
+  status: STATUTS_OFFRE,
+  status_reason: MOTIFS_STATUT,
+  verification_status: STATUTS_VERIFICATION,
+};
+
+const valeurVersion = (valeur: unknown, champ?: string): string => {
   if (valeur === null || valeur === undefined || valeur === '') return '(vide)';
+  const referentiel = champ ? REFERENTIELS_VERSION[champ] : undefined;
+  // Le motif « aucun » a un libellé vide (rien à afficher à côté du statut) : dans l'historique, on l'écrit.
+  if (referentiel?.est(valeur)) return referentiel.libelle(String(valeur)) || 'aucun';
   if (typeof valeur === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(valeur)) return dateCourte(valeur);
   if (typeof valeur === 'object') return '…';
   return String(valeur).slice(0, 60);
@@ -119,12 +133,17 @@ export default async function PageOffre({ params }: { params: Promise<{ id: stri
   const seuils = { modere: parametres.risque.seuilModere, eleve: parametres.risque.seuilEleve };
   const risqueEleve = offre.risk_score >= seuils.eleve;
   const details = offre.score_details as { risque?: Signal[]; pertinence?: LigneScore[]; qualite?: LigneScore[]; placement?: LigneScore[]; doublonProbable?: { id: string; reference: string; score: number }; champsVerrouilles?: string[] };
-  const explication = explicationStatut(offre, parametres.offres.dureeValiditeJours, parametres.offres.delaiReverificationJours);
+  const explication = explicationStatut(offre, parametres.offres.dureeValiditeJours, parametres.offres.delaiReverificationJours, parametres.perimetre.dateMin);
   const remuneration = salaire(offre.salary_min, offre.salary_max, offre.salary_period);
   const texteAnnonce = offre.description_full ?? offre.description_excerpt;
   const correction = valeursCorrection(offre);
   const archivee = offre.status === 'archive';
+  // Une offre archivée ne se corrige plus, sauf si elle l'a été pour sa seule date : une date mal relevée doit pouvoir être rectifiée.
+  const corrigeable = moderer && (!archivee || (offre.status_reason === 'hors_perimetre_date' && !offre.duplicate_of_id));
+  const plancherDate = dateIso(DEBUT_RECHERCHE_PLANCHER);
   const competences = offre.competences.map((code) => COMPETENCES.find((c) => c.code === code)?.fr ?? code);
+  // L'annonce ressemblante a été écartée pour sa date alors que celle-ci est dans la période : le rattachement se ferait dans l'autre sens, on le dit avant.
+  const probableEcartee = details.doublonProbable && !offre.duplicate_of_id ? (await sensRattachement(offre, details.doublonProbable.id)) === 'celle-ci' : false;
 
   return (
     <>
@@ -178,10 +197,20 @@ export default async function PageOffre({ params }: { params: Promise<{ id: stri
               {details.doublonProbable.reference}
             </Link>{' '}
             (ressemblance {Math.round(details.doublonProbable.score)} %). Elle n’a pas été rattachée automatiquement : comparez les deux fiches.
+            {probableEcartee ? ` ${details.doublonProbable.reference} a été publiée avant le début de la recherche : si c’est la même annonce, c’est elle qui sera rattachée à cette offre, qui restera l’offre principale.` : null}
           </p>
           {moderer ? (
             <div className="mt-2 flex flex-wrap gap-2">
-              <BoutonAction action={lierDoublonAction} champs={{ id: offre.id, principale: details.doublonProbable.id }} variante="primaire" confirmer="Rattacher cette offre comme doublon ? Elle sera archivée.">
+              <BoutonAction
+                action={lierDoublonAction}
+                champs={{ id: offre.id, principale: details.doublonProbable.id }}
+                variante="primaire"
+                confirmer={
+                  probableEcartee
+                    ? `Confirmer que c’est la même annonce ? ${details.doublonProbable.reference} sera rattachée à cette offre, qui restera l’offre principale.`
+                    : 'Rattacher cette offre comme doublon ? Elle sera archivée.'
+                }
+              >
                 C’est la même annonce
               </BoutonAction>
               <BoutonAction action={ecarterDoublonAction} champs={{ id: offre.id }}>
@@ -294,7 +323,7 @@ export default async function PageOffre({ params }: { params: Promise<{ id: stri
                     <ul className="mt-1 space-y-0.5">
                       {Object.entries(version.changes ?? {}).slice(0, 8).map(([champ, [avant, apres]]) => (
                         <li key={champ}>
-                          <span className="font-semibold text-marine-900">{LIBELLES_CHAMPS[champ] ?? champ}</span> : <span className="text-encre-douce line-through">{valeurVersion(avant)}</span> › {valeurVersion(apres)}
+                          <span className="font-semibold text-marine-900">{LIBELLES_CHAMPS[champ] ?? champ}</span> : <span className="text-encre-douce line-through">{valeurVersion(avant, champ)}</span> › {valeurVersion(apres, champ)}
                         </li>
                       ))}
                       {version.changed_fields.length > 0 && Object.keys(version.changes ?? {}).length === 0 ? <li className="text-encre-douce">{version.changed_fields.map((champ) => LIBELLES_CHAMPS[champ] ?? champ).join(', ')}</li> : null}
@@ -306,14 +335,15 @@ export default async function PageOffre({ params }: { params: Promise<{ id: stri
               <p className="px-5 py-6 text-[0.9rem] text-encre-douce">Aucune modification depuis l’enregistrement.</p>
             )}
           </Carte>
-          {moderer && !archivee ? (
+          {corrigeable ? (
             <Carte titre="Corriger">
               <Formulaire action={corrigerOffreAction} className="space-y-3">
                 <input type="hidden" name="id" value={offre.id} />
                 <p className="text-[0.82rem] text-encre-douce">Ne modifiez que ce qui est faux ou manquant. Un champ corrigé ici ne sera plus écrasé par une collecte, et le statut est recalculé.</p>
                 <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
                   <Champ libelle="Date de publication">
-                    <input className="champ" type="date" name="datePublication" defaultValue={correction.datePublication} min="2026-01-01" />
+                    {/* Pas de borne si la date enregistrée est déjà antérieure au plancher : le navigateur bloquerait toute autre correction. */}
+                    <input className="champ" type="date" name="datePublication" defaultValue={correction.datePublication} min={correction.datePublication && correction.datePublication < plancherDate ? undefined : plancherDate} />
                   </Champ>
                   <Champ libelle="Date limite">
                     <input className="champ" type="date" name="dateExpiration" defaultValue={correction.dateExpiration} />
@@ -443,6 +473,10 @@ export default async function PageOffre({ params }: { params: Promise<{ id: stri
                     <BoutonAction action={dissocierDoublonAction} champs={{ id: offre.id }} confirmer="Dissocier cette offre de l’offre principale ?">
                       Ce n’est pas un doublon : dissocier
                     </BoutonAction>
+                  ) : offre.status_reason === 'hors_perimetre_date' ? (
+                    <p className="text-[0.88rem] text-encre-douce">
+                      Elle ne se rouvre pas à la main : elle reviendra d’elle-même si le début de la recherche est reculé jusqu’à sa date de publication, ou si cette date est rectifiée dans « Corriger ».
+                    </p>
                   ) : (
                     <Formulaire action={verifierOffreAction} className="space-y-2">
                       <input type="hidden" name="id" value={offre.id} />

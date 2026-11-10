@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { deciderDoublon, empreinte, motsSignificatifs, normaliserEmployeur, similarite, urlCanonique, type OffreComparable } from '@/domaine/doublons';
+import { deciderDoublon, deciderRattachement, empreinte, motsSignificatifs, normaliserEmployeur, similarite, urlCanonique, type CandidatDoublon, type OffreComparable } from '@/domaine/doublons';
 import { indicePlacement, scoreFraicheur, scorePertinence, scoreQualite } from '@/domaine/scores';
 
 const MAINTENANT = new Date('2026-11-10T10:00:00Z');
@@ -130,5 +130,43 @@ describe('doublons', () => {
     const a = offre({ employeur: 'Hôtel Exemple', titre: 'Réceptionniste de nuit', metier: 'receptionniste' });
     const b = offre({ employeur: 'Hôtel Exemple', titre: 'Femme de chambre', metier: 'femme_chambre' });
     expect(deciderDoublon(similarite(a, b).score, SEUILS)).toBe('distinct');
+  });
+});
+
+describe('doublons et début de la recherche', () => {
+  // Candidats tels que la recherche les renvoie : l'offre principale visée, triés du plus ressemblant au moins ressemblant.
+  const certain = (id: string, horsPeriode = false): CandidatDoublon => ({ id, decision: 'doublon', horsPeriode });
+  const probable = (id: string, horsPeriode = false): CandidatDoublon => ({ id, decision: 'probable', horsPeriode });
+
+  it('rattache une annonce de la période à une offre de la période', () => {
+    expect(deciderRattachement(true, [certain('a'), probable('b')])).toEqual({ lie: certain('a'), remplacees: [], probable: null });
+    // Entre une jumelle écartée et une jumelle de la période, c'est celle de la période qui est retenue.
+    expect(deciderRattachement(true, [certain('ancienne', true), certain('recente')])).toEqual({ lie: certain('recente'), remplacees: [], probable: null });
+  });
+
+  it('ne masque jamais une annonce de la période derrière une annonce publiée avant le début de la recherche', () => {
+    const decision = deciderRattachement(true, [certain('ancienne', true)]);
+    expect(decision.lie).toBeNull();
+    expect(decision.remplacees).toEqual([certain('ancienne', true)]);
+    expect(decision.probable).toBeNull();
+    // La même offre principale trouvée par deux de ses doublons n'est remplacée qu'une fois.
+    expect(deciderRattachement(true, [certain('ancienne', true), certain('ancienne', true), certain('autre', true)]).remplacees.map((c) => c.id)).toEqual(['ancienne', 'autre']);
+  });
+
+  it('ne signale à une annonce de la période que les ressemblances avec des offres de la période', () => {
+    expect(deciderRattachement(true, [probable('ancienne', true)])).toEqual({ lie: null, remplacees: [], probable: null });
+    expect(deciderRattachement(true, [probable('ancienne', true), probable('recente')])).toEqual({ lie: null, remplacees: [], probable: probable('recente') });
+    expect(deciderRattachement(true, [certain('ancienne', true), probable('recente')])).toEqual({ lie: null, remplacees: [certain('ancienne', true)], probable: probable('recente') });
+  });
+
+  it('garde la règle générale pour une annonce hors période ou sans date fiable', () => {
+    expect(deciderRattachement(false, [certain('ancienne', true), certain('recente')])).toEqual({ lie: certain('ancienne', true), remplacees: [], probable: null });
+    expect(deciderRattachement(false, [probable('ancienne', true)])).toEqual({ lie: null, remplacees: [], probable: probable('ancienne', true) });
+    expect(deciderRattachement(false, [probable('a'), certain('b')])).toEqual({ lie: certain('b'), remplacees: [], probable: null });
+  });
+
+  it('ne fait rien sans annonce ressemblante', () => {
+    expect(deciderRattachement(true, [])).toEqual({ lie: null, remplacees: [], probable: null });
+    expect(deciderRattachement(false, [])).toEqual({ lie: null, remplacees: [], probable: null });
   });
 });

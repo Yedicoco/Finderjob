@@ -22,11 +22,31 @@ import { chargerParametres } from './parametres';
 import { changerStatutCommission, changerStatutPlacement, creerPlacement } from './placements';
 import { sourceParCode } from './sources';
 import { ErreurMetier } from '@/domaine/erreurs';
+import { instantVersHorlogeMaroc } from '@/domaine/fuseau';
 
 const CODE_SOURCE = 'jeu-demonstration';
 const JOUR = 86_400_000;
+/** Âge de la plus ancienne annonce « courante » du jeu, en jours. */
+const AGE_MAX = 20;
 
-const jourAvant = (maintenant: Date, jours: number): string => new Date(maintenant.getTime() - jours * JOUR).toISOString().slice(0, 10);
+/** Jour civil de Casablanca, au format AAAA-MM-JJ. */
+const jourCivil = (instant: Date): string => instantVersHorlogeMaroc(instant).toISOString().slice(0, 10);
+const jourAvant = (maintenant: Date, jours: number): string => jourCivil(new Date(maintenant.getTime() - jours * JOUR));
+
+/**
+ * Les annonces courantes du jeu (âge prévu de 1 à 20 jours) sont réparties sur
+ * la période de recherche. Tant que la recherche a commencé il y a 20 jours ou
+ * plus, rien ne change ; si elle commence plus tard (le lundi de la semaine en
+ * cours, par exemple), les âges sont resserrés entre ce début et aujourd'hui,
+ * sans changer l'ordre des annonces. L'annonce volontairement ancienne
+ * (60 jours) garde son âge : elle est expirée, ou écartée si elle précède le
+ * début de la recherche — c'est le cas d'école qu'elle illustre.
+ */
+export function ageDansLaPeriode(ilYa: number, debutRecherche: Date, maintenant: Date): number {
+  if (ilYa > AGE_MAX) return ilYa;
+  const joursDisponibles = Math.max(0, Math.round((Date.parse(jourCivil(maintenant)) - Date.parse(jourCivil(debutRecherche))) / JOUR));
+  return Math.round(ilYa * Math.min(1, joursDisponibles / AGE_MAX));
+}
 
 type OffreDemo = Omit<SaisieManuelle, 'datePublication'> & { ilYa: number | null };
 
@@ -89,9 +109,10 @@ export async function chargerJeuDemo(acteur: Acteur, maintenant = new Date()): P
   );
   const source = (await sourceParCode(CODE_SOURCE))!;
   const idsOffres: string[] = [];
+  const debutRecherche = new Date(parametres.perimetre.dateMin);
   for (const [index, modele] of OFFRES.entries()) {
     const { ilYa, ...saisie } = modele;
-    const brute = offreDepuisSaisie({ ...saisie, datePublication: ilYa === null ? null : jourAvant(maintenant, ilYa) });
+    const brute = offreDepuisSaisie({ ...saisie, datePublication: ilYa === null ? null : jourAvant(maintenant, ageDansLaPeriode(ilYa, debutRecherche, maintenant)) });
     const analyse = analyserOffre({ ...brute, idExterne: `demo-${index + 1}` }, politique(source, { kind: 'manuel' }), { maintenant, parametres });
     if (analyse.type !== 'offre') continue;
     const resultat = await enregistrerOffre(analyse.offre, { sourceId: source.id, maintenant, parametres, acteur, origine: 'saisie', estDemo: true });

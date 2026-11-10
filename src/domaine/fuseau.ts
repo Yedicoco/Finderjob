@@ -89,8 +89,11 @@ export function horlogeMarocVersInstant(lueCommeUtc: Date): Date {
 
 const jourEcrit = new Intl.DateTimeFormat('fr-FR', { timeZone: 'UTC', day: 'numeric', month: 'long', year: 'numeric' });
 
-/** « 10 novembre 2026 » : le jour de Casablanca, écrit en toutes lettres. */
-export const jourEcritMaroc = (instant: Date): string => jourEcrit.format(instantVersHorlogeMaroc(instant));
+/** Usage français : le premier jour du mois s'écrit « 1er » (« 1er janvier 2026 », « jeudi 1er janvier 2026 »). */
+export const premierDuMois = (dateEcrite: string): string => dateEcrite.replace(/(^| )1 (?=\p{L})/u, '$11er ');
+
+/** « 10 novembre 2026 », « 1er janvier 2026 » : le jour de Casablanca, écrit en toutes lettres. */
+export const jourEcritMaroc = (instant: Date): string => premierDuMois(jourEcrit.format(instantVersHorlogeMaroc(instant)));
 
 const JOUR_SEUL = /^(\d{4})-(\d{2})-(\d{2})$/;
 

@@ -15,6 +15,7 @@ import { notifierRelances, traiterAlertes } from '../src/serveur/alertes';
 import { fermerPool } from '../src/serveur/db';
 import { executerCollecte, sourcesAExecuter } from '../src/serveur/ingestion';
 import { executerMaintenance } from '../src/serveur/maintenance';
+import { phraseBilanPerimetre } from '../src/serveur/perimetre';
 
 const INTERVALLE_MS = 5 * 60_000;
 const MAINTENANCE_MS = 60 * 60_000;
@@ -40,7 +41,7 @@ export async function passage(): Promise<void> {
   if (Date.now() - derniereMaintenance >= MAINTENANCE_MS) {
     const bilan = await executerMaintenance();
     derniereMaintenance = Date.now();
-    journal(`maintenance : ${compter(bilan.statutsFiges, 'statut')} ${accord(bilan.statutsFiges, 'figé')}, ${compter(bilan.scores, 'score')} ${accord(bilan.scores, 'recalculé')}, ${compter(bilan.candidatsAnonymises, 'fiche')} ${accord(bilan.candidatsAnonymises, 'anonymisée')}`);
+    journal(`maintenance : ${compter(bilan.statutsFiges, 'statut')} ${accord(bilan.statutsFiges, 'figé')}, ${compter(bilan.scores, 'score')} ${accord(bilan.scores, 'recalculé')}, ${compter(bilan.candidatsAnonymises, 'fiche')} ${accord(bilan.candidatsAnonymises, 'anonymisée')}${bilan.perimetre.ecartees || bilan.perimetre.reprises ? ` ; début de la recherche : ${phraseBilanPerimetre(bilan.perimetre)}` : ''}`);
   }
 }
 

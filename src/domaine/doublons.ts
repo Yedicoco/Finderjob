@@ -155,3 +155,42 @@ export function deciderDoublon(score: number, seuils: { seuilLien: number; seuil
   if (score >= seuils.seuilProbable) return 'probable';
   return 'distinct';
 }
+
+export type CandidatDoublon = {
+  /** Offre principale à laquelle l'annonce serait rattachée. */
+  id: string;
+  decision: 'doublon' | 'probable';
+  /** Cette offre principale est archivée parce qu'elle a été publiée avant le début de la recherche. */
+  horsPeriode: boolean;
+};
+
+/**
+ * Que faire des annonces ressemblantes trouvées en base (triées, la plus
+ * ressemblante d'abord) ?
+ *
+ *   lie         l'annonce est rattachée à cette offre principale, et archivée ;
+ *   remplacees  offres principales écartées (publiées avant le début de la
+ *               recherche) dont l'annonce prend la place : ce sont elles qui
+ *               lui sont rattachées, et non l'inverse ;
+ *   probable    ressemblance à signaler au courtier, sans rattachement.
+ *
+ * Règle : une annonce publiée dans la période de recherche n'est jamais masquée
+ * par une annonce plus ancienne que le début de la recherche. Elle n'est donc
+ * rattachée qu'à une offre de la période ; à défaut, c'est elle qui devient
+ * l'offre principale. Une ressemblance seulement probable avec une annonce
+ * écartée n'est pas signalée : la réponse du courtier ne changerait rien.
+ * Une annonce hors période (ou sans date fiable) suit la règle générale :
+ * rattachée à l'offre la plus ressemblante, quelle qu'elle soit.
+ */
+export function deciderRattachement<T extends CandidatDoublon>(annonceDansLaPeriode: boolean, candidats: readonly T[]): { lie: T | null; remplacees: T[]; probable: T | null } {
+  if (!annonceDansLaPeriode) {
+    const lie = candidats.find((candidat) => candidat.decision === 'doublon') ?? null;
+    return { lie, remplacees: [], probable: lie ? null : (candidats[0] ?? null) };
+  }
+  const dansLaPeriode = candidats.filter((candidat) => !candidat.horsPeriode);
+  const lie = dansLaPeriode.find((candidat) => candidat.decision === 'doublon') ?? null;
+  if (lie) return { lie, remplacees: [], probable: null };
+  // Une même offre principale peut être trouvée par plusieurs de ses doublons : on ne la garde qu'une fois.
+  const remplacees = [...new Map(candidats.filter((candidat) => candidat.horsPeriode && candidat.decision === 'doublon').map((candidat) => [candidat.id, candidat])).values()];
+  return { lie: null, remplacees, probable: dansLaPeriode[0] ?? null };
+}

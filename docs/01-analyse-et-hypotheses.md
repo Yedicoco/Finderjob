@@ -4,8 +4,9 @@
 
 Un outil interne pour Yallah Services, intermédiaire de placement à Casablanca, qui :
 
-1. **repère** les offres d'emploi publiées au Maroc depuis le 1er janvier 2026 dans ses trois secteurs
-   (personnel de maison, beauté et bien-être, conciergerie et hospitalité) ;
+1. **repère** les offres d'emploi publiées au Maroc depuis le début de la recherche (une date réglable, au
+   plus tôt le 1er janvier 2026) dans ses trois secteurs (personnel de maison, beauté et bien-être,
+   conciergerie et hospitalité) ;
 2. **qualifie** chaque offre : d'où elle vient, quand elle a été publiée, si elle est encore valable, si elle
    présente un risque, si elle existe déjà ;
 3. **aide à placer** : candidats, employeurs, besoins, rapprochements, placements, commissions ;
@@ -18,7 +19,7 @@ Un outil interne pour Yallah Services, intermédiaire de placement à Casablanca
 | --- | --- | --- |
 | Utilisateurs | Une petite équipe : administrateur, courtiers, lecteurs. Pas d'accès candidat ni employeur. | Rôles dans `src/serveur/auth.ts` |
 | Langue | Interface en français ; annonces lues en français, arabe et anglais. | — |
-| Périmètre | Maroc uniquement ; offres publiées à partir du 1er janvier 2026. La date peut être resserrée, jamais avancée. | Administration › Paramètres |
+| Périmètre | Maroc uniquement ; offres publiées à partir du début de la recherche : **lundi 9 novembre 2026** (semaine en cours, à la demande de Yallah Services le 10 novembre 2026). Date fixe, qui n'avance pas d'elle-même ; un administrateur la déplace entre le 1er janvier 2026 (plancher du cahier des charges) et le jour même. | Administration › Paramètres |
 | Validité d'une offre | 45 jours après publication, sauf date limite écrite dans l'annonce. | Paramètre « durée de validité » |
 | Heure | Toutes les dates sont lues et affichées à l'heure légale du Maroc : GMT (UTC+0) toute l'année depuis le 20 septembre 2026 ; auparavant UTC+1, et UTC+0 pendant le ramadan. | `src/domaine/fuseau.ts` |
 | Formules | Premium 1 000 DH (remplacement 6 mois) et Sérénité 500 DH (2 mois), reprises du dépôt du site public. | `src/domaine/parametres.ts` |

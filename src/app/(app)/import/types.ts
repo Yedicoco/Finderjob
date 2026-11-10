@@ -15,7 +15,8 @@ export type ApercuVue = {
     explication: string | null;
     risque: { score: number; niveau: 'faible' | 'modere' | 'eleve'; signaux: string[] };
     pertinence: number;
-    doublons: { id: string; reference: string; titre: string; score: number; certain: boolean }[];
+    /** role : « doublon » (l'annonce sera rattachée et archivée), « remplace » (l'annonce prend la place d'une offre publiée avant le début de la recherche), « ressemble ». */
+    doublons: { id: string; reference: string; titre: string; score: number; role: 'doublon' | 'remplace' | 'ressemble' }[];
   } | null;
 };
 

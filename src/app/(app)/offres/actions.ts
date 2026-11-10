@@ -60,15 +60,20 @@ export async function creerEmployeurDepuisOffre(_etat: EtatAction, donnees: Form
 
 export async function lierDoublonAction(_etat: EtatAction, donnees: FormData): Promise<EtatAction> {
   return executerAction('offres.moderer', async ({ acteur }) => {
-    await lierDoublon(texte(donnees, 'id'), texte(donnees, 'principale'), acteur);
-    return { message: 'Offre rattachée comme doublon et archivée.' };
+    const lien = await lierDoublon(texte(donnees, 'id'), texte(donnees, 'principale'), acteur);
+    return {
+      message:
+        lien.principale === 'celle-ci'
+          ? `${lien.reference} a été publiée avant le début de la recherche : c’est elle qui est rattachée à cette offre, qui reste l’offre principale.`
+          : 'Offre rattachée comme doublon et archivée.',
+    };
   });
 }
 
 export async function dissocierDoublonAction(_etat: EtatAction, donnees: FormData): Promise<EtatAction> {
   return executerAction('offres.moderer', async ({ acteur }) => {
-    await dissocierDoublon(texte(donnees, 'id'), acteur);
-    return { message: 'Offre dissociée : elle est à vérifier avant de redevenir active.' };
+    const { statut } = await dissocierDoublon(texte(donnees, 'id'), acteur);
+    return { message: statut === 'archive' ? 'Offre dissociée. Publiée avant le début de la recherche, elle reste archivée.' : 'Offre dissociée : elle est à vérifier avant de redevenir active.' };
   });
 }
 

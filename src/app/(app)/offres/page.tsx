@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import Link from '@/composants/lien';
-import { nombre, pluriel } from '@/composants/format';
+import { dateLongue, nombre, pluriel } from '@/composants/format';
 import { Icone } from '@/composants/icones';
 import { LigneOffre } from '@/composants/offres';
 import { OPTIONS_SECTEURS, OPTIONS_VILLES, SelectionMetier } from '@/composants/options';
@@ -87,7 +87,10 @@ export default async function PageOffres({ searchParams }: { searchParams: Promi
           ) : null
         }
       >
-        <p>Annonces au Maroc publiées depuis le 1er janvier 2026 — personnel de maison, beauté et bien-être, conciergerie et hospitalité. Par défaut, seules les offres actives sont affichées.</p>
+        <p>
+          Annonces au Maroc publiées depuis le {dateLongue(parametres.perimetre.dateMin)} — personnel de maison, beauté et bien-être, conciergerie et hospitalité. Par défaut, seules les offres actives sont
+          affichées.
+        </p>
       </EnTetePage>
 
       <form method="get" action="/offres" className="mb-4 rounded-xl border border-sable-200 bg-white p-3 shadow-carte sm:p-4" role="search">

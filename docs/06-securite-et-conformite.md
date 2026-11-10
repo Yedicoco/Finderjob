@@ -62,10 +62,14 @@ Par défaut, seule une commission à la charge de l'employeur peut être saisie.
 Enregistre notamment : connexions réussies et refusées, consultation d'une fiche candidat, affichage d'un
 contact, création et modification des fiches, vérification et archivage des offres, changements de statut des
 placements et commissions, modification d'une source ou d'un paramètre, exports, chargement et suppression
-du jeu de démonstration. La base refuse toute modification ou suppression de ses lignes.
+du jeu de démonstration. Un changement du début de la recherche y inscrit le réglage (ancienne et nouvelle
+date, auteur) puis, si des offres sont concernées, son effet (nombre d'offres écartées et reprises) ; chacune
+de ces offres garde en plus une ligne dans son propre historique. La base refuse toute modification ou
+suppression des lignes du journal.
 
 ## Vérifier une installation
 
 `npm run verifier` liste les points bloquants et les points d'attention : clé de chiffrement, sources actives
 et ancienneté de la lecture de leurs conditions, commission travailleur, fiches au-delà de la durée de
-conservation, offres actives hors périmètre, jeu de démonstration chargé, mots de passe provisoires.
+conservation, offres actives hors périmètre (pays, ou date antérieure au début de la recherche en vigueur),
+jeu de démonstration chargé, mots de passe provisoires.

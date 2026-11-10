@@ -7,7 +7,7 @@ import { offreDepuisSaisie } from '@/collecte/connecteurs/manuel';
 import { ClientPoli, ErreurCollecte } from '@/collecte/http';
 import { analyserOffre, type PolitiqueSource } from '@/collecte/pipeline';
 import type { Source } from '@/collecte/types';
-import { PARAMETRES_DEFAUT } from '@/domaine/parametres';
+import { PARAMETRES_TESTS } from '../parametres';
 
 const fixture = (nom: string) => readFileSync(path.join(__dirname, '..', 'fixtures', nom), 'utf8');
 const MAINTENANT = new Date('2026-11-10T10:00:00Z');
@@ -222,7 +222,8 @@ describe('collecte par sitemap de bout en bout (faux site)', () => {
 
 describe('pipeline d’analyse', () => {
   const politique = (surcharge: Partial<PolitiqueSource> = {}): PolitiqueSource => ({ kind: 'rss', collection_mode: 'extrait', max_excerpt_chars: 300, store_contacts: false, keep_unclassified: false, country_default: null, reliability_score: 60, ...surcharge });
-  const contexte = { maintenant: MAINTENANT, parametres: PARAMETRES_DEFAUT };
+  // Début de la recherche épinglé au 1er janvier 2026 : voir tests/parametres.ts.
+  const contexte = { maintenant: MAINTENANT, parametres: PARAMETRES_TESTS };
   const duFlux = () => analyserFlux(fixture('flux-emplois.xml')).map((e) => elementVersOffre(e, 'https://emplois.example/feed/')).filter((o) => o !== null);
 
   it('qualifie une annonce française complète', () => {
