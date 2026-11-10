@@ -35,7 +35,7 @@ export default async function PageDemonstration() {
       <div className="grid items-start gap-6 lg:grid-cols-2">
         <Carte titre="Ce que contient le jeu">
           <ul className="list-disc space-y-1.5 pl-5 text-[0.9rem]">
-            <li>18 annonces inventées dans les trois secteurs (maison, beauté, hospitalité) — en français, plus une en arabe et une en anglais — dont : une offre urgente, un recrutement en nombre, une annonce à risque (frais demandés au candidat), une offre expirée, une offre sans date, un doublon exact et un doublon probable.</li>
+            <li>18 annonces inventées dans les trois secteurs (maison, beauté, hospitalité) — en français, plus une en arabe et une en anglais — dont : une offre urgente, un recrutement en nombre, une annonce à risque (frais demandés au candidat), une annonce trop ancienne (expirée, ou écartée si elle précède le début de la recherche), une offre sans date, un doublon exact et un doublon probable. Les dates de publication sont réparties entre le début de la recherche et aujourd’hui.</li>
             <li>8 candidats nommés « Candidat fictif n° … », sans téléphone ni e-mail.</li>
             <li>2 employeurs fictifs (une famille, un riad) avec leurs besoins, des rapprochements calculés, un placement confirmé et une commission encaissée.</li>
           </ul>

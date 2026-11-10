@@ -7,7 +7,7 @@
  * secrets, sources actives, dérogations, conservation des données.
  */
 import { accord, compter } from '../src/domaine/accord';
-import { PARAMETRES_DEFAUT } from '../src/domaine/parametres';
+import { jourEcritMaroc } from '../src/domaine/fuseau';
 import { apercuIntegre, estProduction } from '../src/serveur/config';
 import { fermerPool, requete, uneLigne } from '../src/serveur/db';
 import { chargerParametres } from '../src/serveur/parametres';
@@ -49,9 +49,11 @@ export async function verifier(): Promise<Constat[]> {
   if (retard > 0) noter('attention', `${compter(retard, 'fiche')} candidat au-delà de la durée de conservation : lancez le worker (anonymisation automatique).`);
   else noter('ok', 'Aucune fiche candidat au-delà de sa durée de conservation.');
 
-  const incoherentes = (await uneLigne<{ n: number }>(`SELECT count(*)::int AS n FROM v_job_offers WHERE effective_status = 'actif' AND (published_at IS NULL OR published_at < $1 OR country_code <> 'MA')`, [PARAMETRES_DEFAUT.perimetre.dateMin]))!.n;
+  // Le début de la recherche est un réglage : c'est la valeur en vigueur qui est contrôlée, pas la valeur d'origine.
+  const debutRecherche = new Date(parametres.perimetre.dateMin);
+  const incoherentes = (await uneLigne<{ n: number }>(`SELECT count(*)::int AS n FROM v_job_offers WHERE effective_status = 'actif' AND (published_at IS NULL OR published_at < $1 OR country_code <> 'MA')`, [debutRecherche]))!.n;
   if (incoherentes > 0) noter('bloquant', `${compter(incoherentes, 'offre')} ${accord(incoherentes, 'active')} hors périmètre (date ou pays) : anomalie à signaler.`);
-  else noter('ok', 'Toutes les offres actives sont au Maroc, datées et postérieures au 1er janvier 2026.');
+  else noter('ok', `Toutes les offres actives sont au Maroc, datées et publiées depuis le ${jourEcritMaroc(debutRecherche)} (début de la recherche).`);
 
   const demo = (await uneLigne<{ n: number }>(`SELECT count(*)::int AS n FROM job_offers WHERE is_demo`))!.n;
   if (demo > 0) noter(estProduction() ? 'attention' : 'ok', `Jeu de démonstration chargé (${demo} offres fictives)${estProduction() ? ' : à supprimer en production' : ''}.`);

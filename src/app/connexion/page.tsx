@@ -4,6 +4,8 @@ import { redirect } from 'next/navigation';
 import { BoutonEnvoi, Formulaire } from '@/composants/formulaire';
 import { Icone } from '@/composants/icones';
 import { Champ } from '@/composants/ui';
+import { jourEcritMaroc } from '@/domaine/fuseau';
+import { chargerParametres } from '@/serveur/parametres';
 import { sessionCourante } from '@/serveur/session-next';
 import { seConnecter } from './actions';
 
@@ -12,6 +14,7 @@ export const metadata: Metadata = { title: 'Connexion' };
 export default async function PageConnexion({ searchParams }: { searchParams: Promise<{ suite?: string }> }) {
   if (await sessionCourante()) redirect('/');
   const { suite } = await searchParams;
+  const debutRecherche = jourEcritMaroc(new Date((await chargerParametres()).perimetre.dateMin));
   return (
     <main className="grid min-h-dvh lg:grid-cols-[minmax(0,1.05fr)_minmax(0,1fr)]">
       <section className="relative flex flex-col justify-between overflow-hidden bg-marine-900 px-6 py-8 text-marine-200 sm:px-10 lg:px-14 lg:py-12">
@@ -43,7 +46,7 @@ export default async function PageConnexion({ searchParams }: { searchParams: Pr
           </h1>
           <ul className="mt-7 space-y-3 text-[0.98rem]">
             {[
-              'Personnel de maison, beauté et hospitalité — annonces publiées depuis le 1er janvier 2026.',
+              `Personnel de maison, beauté et hospitalité — annonces publiées depuis le ${debutRecherche}.`,
               'Chaque offre garde sa source, sa date et son niveau de risque.',
               'Candidats, employeurs, placements et commissions au même endroit.',
             ].map((ligne) => (

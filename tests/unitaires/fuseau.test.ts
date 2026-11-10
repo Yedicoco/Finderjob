@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { dateCourte, dateHeure, dateIso, dateLongue, echeance } from '@/composants/format';
+import { dateCourte, dateHeure, dateIso, dateLongue, echeance, ilYA } from '@/composants/format';
 import { lireDate } from '@/domaine/extraction';
 import { baseFuseauxAJour, dateSaisieMaroc, decalageMaroc, instantMaroc, instantVersHorlogeMaroc, jourEcritMaroc, jourMaroc, RETOUR_GMT_MS } from '@/domaine/fuseau';
 
@@ -114,6 +114,34 @@ describe('affichage à l’heure de Casablanca', () => {
     expect(jourEcritMaroc(new Date('2026-07-10T23:30:00Z'))).toBe('11 juillet 2026');
     expect(dateIso(null)).toBe('');
     expect(dateCourte('pas une date')).toBe('—');
+  });
+
+  it('écrit « 1er » pour le premier jour du mois, et lui seul', () => {
+    // Plancher du périmètre : 1er janvier 2026 à 00 h 00, heure de Casablanca.
+    expect(jourEcritMaroc(new Date('2025-12-31T23:00:00Z'))).toBe('1er janvier 2026');
+    expect(dateLongue(new Date('2025-12-31T23:00:00Z'))).toBe('jeudi 1er janvier 2026');
+    expect(dateLongue(new Date('2026-11-01T10:00:00Z'))).toBe('dimanche 1er novembre 2026');
+    // Début de la recherche par défaut : lundi 9 novembre 2026.
+    expect(dateLongue(new Date('2026-11-09T00:00:00Z'))).toBe('lundi 9 novembre 2026');
+    expect(jourEcritMaroc(new Date('2026-11-09T00:00:00Z'))).toBe('9 novembre 2026');
+    for (const [instant, attendu] of [['2026-11-11T10:00:00Z', '11 novembre 2026'], ['2026-11-21T10:00:00Z', '21 novembre 2026'], ['2026-10-31T10:00:00Z', '31 octobre 2026'], ['2026-11-10T10:00:00Z', '10 novembre 2026']] as const) {
+      expect(jourEcritMaroc(new Date(instant))).toBe(attendu);
+    }
+  });
+
+  it('compte l’ancienneté d’une annonce en jours civils, pas en tranches de 24 heures', () => {
+    const matin = new Date('2026-11-10T08:00:00Z');
+    // Une annonce datée du jour (jour seul, placé en milieu de journée) est « aujourd'hui » dès le matin.
+    expect(ilYA(new Date('2026-11-10T11:00:00Z'), matin)).toBe('aujourd’hui');
+    expect(ilYA(new Date('2026-11-10T00:00:00Z'), matin)).toBe('aujourd’hui');
+    expect(ilYA(new Date('2026-11-09T23:30:00Z'), matin)).toBe('hier');
+    expect(ilYA(new Date('2026-11-09T00:00:00Z'), matin)).toBe('hier');
+    expect(ilYA(new Date('2026-11-05T22:00:00Z'), matin)).toBe('il y a 5 jours');
+    expect(ilYA(new Date('2026-10-20T11:00:00Z'), matin)).toBe('il y a 3 semaines');
+    expect(ilYA(new Date('2026-07-01T11:00:00Z'), matin)).toBe('il y a 4 mois');
+    expect(ilYA(new Date('2026-11-11T09:00:00Z'), matin)).toBe('dans 1 jour');
+    expect(ilYA(new Date('2026-11-13T09:00:00Z'), matin)).toBe('dans 3 jours');
+    expect(ilYA(null, matin)).toBe('date inconnue');
   });
 
   it('compte les échéances en jours civils', () => {

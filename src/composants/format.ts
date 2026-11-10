@@ -1,6 +1,6 @@
 /** Mise en forme partagée (français, heure de Casablanca). Fonctions pures. */
 import { accord } from '@/domaine/accord';
-import { instantVersHorlogeMaroc } from '@/domaine/fuseau';
+import { instantVersHorlogeMaroc, premierDuMois } from '@/domaine/fuseau';
 
 const JOUR_MS = 86_400_000;
 
@@ -24,9 +24,10 @@ export const dateCourte = (valeur: DateEntree): string => {
   const date = versDate(valeur);
   return date ? fmtDate.format(instantVersHorlogeMaroc(date)) : '—';
 };
+/** « mardi 10 novembre 2026 », « jeudi 1er janvier 2026 ». */
 export const dateLongue = (valeur: DateEntree): string => {
   const date = versDate(valeur);
-  return date ? fmtDateLongue.format(instantVersHorlogeMaroc(date)) : '—';
+  return date ? premierDuMois(fmtDateLongue.format(instantVersHorlogeMaroc(date))) : '—';
 };
 export const dateHeure = (valeur: DateEntree): string => {
   const date = versDate(valeur);
@@ -45,12 +46,17 @@ export { accord };
 /** « 1 offre », « 12 offres », « 1 200 offres » : nombre au format français suivi du mot accordé. */
 export const pluriel = (n: number, singulier: string, plurielForme = `${singulier}s`): string => `${fmtNombre.format(n)} ${accord(n, singulier, plurielForme)}`;
 
-/** « aujourd'hui », « hier », « il y a 5 jours », « il y a 3 semaines »… */
+/**
+ * « aujourd'hui », « hier », « il y a 5 jours », « il y a 3 semaines »…
+ * Compté en jours civils de Casablanca, pas en tranches de 24 heures : une
+ * annonce datée d'aujourd'hui (jour seul, placé en milieu de journée) est
+ * « aujourd'hui » dès le matin, et celle d'hier soir est « hier ».
+ */
 export function ilYA(valeur: DateEntree, maintenant: Date = new Date()): string {
   const date = versDate(valeur);
   if (!date) return 'date inconnue';
-  const jours = Math.floor((maintenant.getTime() - date.getTime()) / JOUR_MS);
-  if (jours < 0) return `dans ${pluriel(Math.ceil(-(maintenant.getTime() - date.getTime()) / JOUR_MS), 'jour')}`;
+  const jours = Math.round((Date.parse(dateIso(maintenant)) - Date.parse(dateIso(date))) / JOUR_MS);
+  if (jours < 0) return `dans ${pluriel(-jours, 'jour')}`;
   if (jours === 0) return 'aujourd’hui';
   if (jours === 1) return 'hier';
   if (jours < 14) return `il y a ${jours} jours`;

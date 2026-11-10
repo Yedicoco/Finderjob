@@ -11,6 +11,7 @@ import type { EtatAction } from '@/serveur/etat-action';
 import { executerCollecte, reprendreSource } from '@/serveur/ingestion';
 import { executerMaintenance } from '@/serveur/maintenance';
 import { definirParametre } from '@/serveur/parametres';
+import { phraseBilanPerimetre } from '@/serveur/perimetre';
 import { ErreurSource, modifierSource, type ModificationSource } from '@/serveur/sources';
 
 // ------------------------------------------------------------------------ sources --
@@ -121,8 +122,9 @@ export async function definirParametreAction(_etat: EtatAction, donnees: FormDat
   return executerAction('parametres.gerer', async ({ acteur }) => {
     const cle = texte(donnees, 'cle');
     const valeur = texte(donnees, 'type') === 'booleen' ? coche(donnees, 'valeur') : texte(donnees, 'valeur');
-    await definirParametre(cle, valeur, acteur, { justification: texte(donnees, 'justification') });
-    return { message: 'Paramètre enregistré.' };
+    const { offres } = await definirParametre(cle, valeur, acteur, { justification: texte(donnees, 'justification') });
+    // Le début de la recherche s'applique aussitôt aux offres enregistrées : on dit ce que le changement a produit.
+    return { message: offres ? `Début de la recherche enregistré : ${phraseBilanPerimetre(offres)}.` : 'Paramètre enregistré.' };
   });
 }
 
@@ -132,7 +134,7 @@ export async function executerTachesAction(): Promise<EtatAction> {
     const relances = await notifierRelances();
     const maintenance = await executerMaintenance();
     return {
-      message: `Alertes : ${compter(alertes.notifications, 'notification')}, ${compter(alertes.envoyes, 'envoi')}, ${compter(alertes.simules, 'simulé')}, ${compter(alertes.echecs, 'échec')}. Relances : ${compter(relances, 'rappel')}. Maintenance : ${compter(maintenance.statutsFiges, 'statut')} ${accord(maintenance.statutsFiges, 'figé')}, ${compter(maintenance.scores, 'score')} ${accord(maintenance.scores, 'recalculé')}, ${compter(maintenance.candidatsAnonymises, 'fiche')} ${accord(maintenance.candidatsAnonymises, 'anonymisée')}.`,
+      message: `Alertes : ${compter(alertes.notifications, 'notification')}, ${compter(alertes.envoyes, 'envoi')}, ${compter(alertes.simules, 'simulé')}, ${compter(alertes.echecs, 'échec')}. Relances : ${compter(relances, 'rappel')}. Maintenance : ${compter(maintenance.statutsFiges, 'statut')} ${accord(maintenance.statutsFiges, 'figé')}, ${compter(maintenance.scores, 'score')} ${accord(maintenance.scores, 'recalculé')}, ${compter(maintenance.candidatsAnonymises, 'fiche')} ${accord(maintenance.candidatsAnonymises, 'anonymisée')}.${maintenance.perimetre.ecartees || maintenance.perimetre.reprises ? ` Début de la recherche : ${phraseBilanPerimetre(maintenance.perimetre)}.` : ''}`,
     };
   });
 }

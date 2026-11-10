@@ -2,8 +2,11 @@
 
 import { dateCourte, salaire } from '@/composants/format';
 import type { MotifRejet } from '@/collecte/types';
+import { deciderRattachement } from '@/domaine/doublons';
+import { jourEcritMaroc } from '@/domaine/fuseau';
 import { nomVille } from '@/domaine/geographie';
 import { CONTRATS, MOTIFS_STATUT, STATUTS_OFFRE, TYPES_EMPLOYEUR } from '@/domaine/referentiels';
+import { MOTIFS_HORS_PERIODE } from '@/domaine/statuts';
 import { libelleMetier } from '@/domaine/taxonomie';
 import { coche, executerActionAvecResultat, nombreOuNul, texte, texteOuNul } from '@/serveur/actions';
 import { ErreurImport, apercuSaisie, importerFichier, importerSaisie, type ApercuSaisie, type SaisieImport } from '@/serveur/ingestion';
@@ -22,7 +25,6 @@ const REJETS: Record<MotifRejet, string> = {
 const EXPLICATIONS: Record<string, string> = {
   date_inconnue: 'Aucune date de publication n’a été trouvée. L’offre sera enregistrée comme « douteuse » : renseignez la date écrite sur l’annonce pour qu’elle puisse être active.',
   date_incoherente: 'La date de publication est dans le futur : vérifiez-la.',
-  hors_perimetre_date: 'L’annonce date d’avant le 1er janvier 2026 : elle sera archivée d’office.',
   localisation_inconnue: 'Aucune ville marocaine n’a été reconnue. Choisissez la ville si l’annonce la précise.',
   risque_eleve: 'Plusieurs signaux de risque : l’offre sera enregistrée comme « douteuse » et ne sera proposée à personne avant vérification.',
   expiree_source: 'La date limite de l’annonce est déjà dépassée.',
@@ -53,7 +55,13 @@ function controlerSaisie(saisie: SaisieImport): void {
   if (saisie.typeEmployeur && !TYPES_EMPLOYEUR.est(saisie.typeEmployeur)) throw new ErreurImport('Type d’employeur inconnu.');
 }
 
-function vueApercu(apercu: ApercuSaisie, seuils: { modere: number; eleve: number }): ApercuVue {
+/** Ce que l'outil fera de l'annonce, et pourquoi. Le début de la recherche est un réglage : il est cité tel qu'il est en vigueur. */
+function expliquer(motif: string, debutRecherche: string): string | null {
+  if (motif === 'hors_perimetre_date') return `L’annonce a été publiée avant le début de la recherche (${jourEcritMaroc(new Date(debutRecherche))}) : elle sera archivée d’office.`;
+  return EXPLICATIONS[motif] ?? null;
+}
+
+function vueApercu(apercu: ApercuSaisie, seuils: { modere: number; eleve: number }, debutRecherche: string): ApercuVue {
   const texteComplet = apercu.source.collection_mode === 'texte_complet';
   const base = {
     source: apercu.source.name,
@@ -64,6 +72,10 @@ function vueApercu(apercu: ApercuSaisie, seuils: { modere: number; eleve: number
   };
   if (apercu.analyse.type === 'rejet') return { ...base, rejet: { titre: REJETS[apercu.analyse.motif], detail: apercu.analyse.detail }, offre: null };
   const o = apercu.analyse.offre;
+  // Même décision qu'à l'enregistrement : l'aperçu annonce ce qui se passera vraiment.
+  const rattachement = deciderRattachement(!MOTIFS_HORS_PERIODE.includes(o.status_reason), apercu.doublons);
+  const roleDoublon = (doublon: ApercuSaisie['doublons'][number]): 'doublon' | 'remplace' | 'ressemble' =>
+    doublon.decision !== 'doublon' ? 'ressemble' : rattachement.lie?.id === doublon.id ? 'doublon' : rattachement.remplacees.some((ancienne) => ancienne.id === doublon.id) ? 'remplace' : 'ressemble';
   const metier = o.categories.find((categorie) => categorie.principal)?.code ?? null;
   const remuneration = salaire(o.salary_min, o.salary_max, o.salary_period);
   const lignes: LigneApercu[] = [
@@ -84,10 +96,10 @@ function vueApercu(apercu: ApercuSaisie, seuils: { modere: number; eleve: number
       lignes,
       statut: `${STATUTS_OFFRE.libelle(o.status)}${o.status_reason !== 'aucun' ? ` — ${MOTIFS_STATUT.libelle(o.status_reason).toLowerCase()}` : ''}`,
       actif: o.status === 'actif',
-      explication: EXPLICATIONS[o.status_reason] ?? null,
+      explication: expliquer(o.status_reason, debutRecherche),
       risque: { score: o.risk_score, niveau: o.risk_score >= seuils.eleve ? 'eleve' : o.risk_score >= seuils.modere ? 'modere' : 'faible', signaux: o.score_details.risque.map((signal) => signal.libelle) },
       pertinence: o.relevance_score,
-      doublons: apercu.doublons.slice(0, 3).map((doublon) => ({ id: doublon.id, reference: doublon.reference, titre: doublon.titre, score: doublon.score, certain: doublon.decision === 'doublon' })),
+      doublons: apercu.doublons.slice(0, 3).map((doublon) => ({ id: doublon.id, reference: doublon.reference, titre: doublon.titre, score: doublon.score, role: roleDoublon(doublon) })),
     },
   };
 }
@@ -99,9 +111,9 @@ export async function analyserOuImporter(_etat: EtatImport, donnees: FormData): 
     async ({ acteur }): Promise<EtatImport> => {
       const saisie = lireSaisie(donnees);
       controlerSaisie(saisie);
+      const parametres = await chargerParametres();
       if (!enregistrer) {
-        const parametres = await chargerParametres();
-        return { apercu: vueApercu(await apercuSaisie(saisie), { modere: parametres.risque.seuilModere, eleve: parametres.risque.seuilEleve }) };
+        return { apercu: vueApercu(await apercuSaisie(saisie), { modere: parametres.risque.seuilModere, eleve: parametres.risque.seuilEleve }, parametres.perimetre.dateMin) };
       }
       const resultat = await importerSaisie(saisie, acteur);
       let vue: ResultatImportVue;
@@ -119,13 +131,19 @@ export async function analyserOuImporter(_etat: EtatImport, donnees: FormData): 
           };
         else if (resultat.type === 'inchangee') vue = { ton: 'attention', titre: `Annonce déjà enregistrée (${resultat.reference})`, detail: 'Rien n’a changé depuis le dernier enregistrement.', lien };
         else if (resultat.type === 'mise_a_jour') vue = { ton: 'succes', titre: `${resultat.reference} mise à jour`, detail: `L’annonce était déjà connue ; ses informations ont été actualisées. Statut : ${statut}.`, lien };
-        else
-          vue = {
-            ton: resultat.statut === 'actif' ? 'succes' : 'attention',
-            titre: `${resultat.reference} enregistrée — ${statut}`,
-            detail: resultat.doublonProbable ? `Attention : elle ressemble à ${resultat.doublonProbable.reference} (${resultat.doublonProbable.score} %). Comparez les deux fiches.` : resultat.statut === 'actif' ? 'Elle apparaît dans la liste des offres actives.' : 'Elle n’apparaît pas parmi les offres actives tant qu’elle n’est pas complétée ou vérifiée.',
-            lien,
-          };
+        else {
+          const detail =
+            resultat.motif === 'hors_perimetre_date'
+              ? `Publiée avant le début de la recherche (${jourEcritMaroc(new Date(parametres.perimetre.dateMin))}), elle est archivée d’office : elle n’apparaît pas parmi les offres actives.`
+              : resultat.doublonProbable
+                ? `Attention : elle ressemble à ${resultat.doublonProbable.reference} (${resultat.doublonProbable.score} %). Comparez les deux fiches.`
+                : resultat.statut === 'actif'
+                  ? 'Elle apparaît dans la liste des offres actives.'
+                  : 'Elle n’apparaît pas parmi les offres actives tant qu’elle n’est pas complétée ou vérifiée.';
+          // La même annonce existait, publiée avant le début de la recherche : elle est désormais rattachée à celle-ci.
+          const remplace = resultat.remplace ? ` Elle prend la place de ${resultat.remplace.reference}, la même annonce publiée avant le début de la recherche.` : '';
+          vue = { ton: resultat.statut === 'actif' ? 'succes' : 'attention', titre: `${resultat.reference} enregistrée — ${statut}`, detail: `${detail}${remplace}`, lien };
+        }
       }
       return { resultat: vue };
     },

@@ -11,7 +11,7 @@ import { CONTRATS, PERIODES_SALAIRE, TYPES_EMPLOYEUR } from '@/domaine/referenti
 import { mensualiser } from '@/domaine/extraction';
 import { normaliserEmployeur } from '@/domaine/doublons';
 import { indicePlacement, scoreFraicheur, scorePertinence } from '@/domaine/scores';
-import { statutInitial } from '@/domaine/statuts';
+import { statutInitial, TOLERANCE_FUTUR_MS } from '@/domaine/statuts';
 import { metierParCode, motsClesRecherche } from '@/domaine/taxonomie';
 import { compter } from '@/domaine/accord';
 import { normaliserTexte } from '@/domaine/texte';
@@ -19,9 +19,10 @@ import { journaliser, type Acteur } from './audit';
 import { dechiffrerOuVide } from './chiffrement';
 import { executer, requete, transaction, uneLigne, type Executeur } from './db';
 import { chargerParametres } from './parametres';
+import { releverOffrePrincipale } from './perimetre';
 import { idsCategories } from './referentiel';
 import { ErreurMetier } from '@/domaine/erreurs';
-import { dateSaisieMaroc } from '@/domaine/fuseau';
+import { dateSaisieMaroc, jourEcritMaroc } from '@/domaine/fuseau';
 
 export type Offre = {
   id: string;
@@ -303,7 +304,9 @@ export async function verifierOffre(id: string, acteur: Acteur, note?: string | 
       // Le courtier atteste avoir vérifié l'annonce : lieu et risque sont considérés comme levés.
       pays: 'MA', villeConnue: true, scoreRisque: 0, estDoublonDe: false, maintenant, parametres,
     });
-    if (decision.motif === 'hors_perimetre_date') throw new ErreurOffre('Offre antérieure au 1er janvier 2026 : hors périmètre, elle reste archivée.');
+    if (decision.motif === 'hors_perimetre_date') {
+      throw new ErreurOffre(`Offre publiée avant le début de la recherche (${jourEcritMaroc(new Date(parametres.perimetre.dateMin))}) : hors périmètre, elle reste archivée.`);
+    }
     if (decision.motif === 'date_incoherente') throw new ErreurOffre('La date de publication est dans le futur : corrigez-la avant de vérifier l’offre.');
     await executer(
       `UPDATE job_offers SET status = $2, status_reason = $3, verification_status = 'verifiee', requires_human_review = false, reviewed_by = $4, reviewed_at = $5,
@@ -339,9 +342,17 @@ export async function archiverOffre(id: string, motif: keyof typeof MOTIFS_ARCHI
   });
 }
 
-export async function lierDoublon(id: string, principaleId: string, acteur: Acteur, maintenant = new Date()): Promise<void> {
+/**
+ * Rattache l'offre `id` à l'offre principale comme doublon, et l'archive.
+ *
+ * Exception : si l'offre principale a été écartée parce qu'elle précède le
+ * début de la recherche, alors que l'offre `id` a été publiée dans la période,
+ * le rattachement se fait dans l'autre sens — l'annonce de la période reste
+ * l'offre principale (`principale: 'celle-ci'`).
+ */
+export async function lierDoublon(id: string, principaleId: string, acteur: Acteur, maintenant = new Date()): Promise<{ principale: 'autre' | 'celle-ci'; reference: string }> {
   if (id === principaleId) throw new ErreurOffre('Une offre ne peut pas être son propre doublon.');
-  await transaction(async (tx) => {
+  return transaction(async (tx) => {
     const offre = await charger(id, tx);
     const principale = await charger(principaleId, tx);
     const racine = principale.duplicate_of_id ?? principale.id;
@@ -355,24 +366,68 @@ export async function lierDoublon(id: string, principaleId: string, acteur: Acte
     // Les doublons de l'offre absorbée suivent.
     await executer(`UPDATE job_offers SET duplicate_of_id = $2 WHERE duplicate_of_id = $1`, [id, racine], tx);
     await historiser(tx, id, 'fusion_doublon', { duplicate_of: [null, principale.reference], status: [offre.status, 'archive'] }, acteur);
-    await journaliser({ acteur, action: 'offre.doublon_lie', entite: 'offre', id, resume: `${offre.reference} rattachée à ${principale.reference}` }, tx);
+    // Une annonce de la période n'est jamais masquée par une annonce plus ancienne que le début de la recherche :
+    // si l'offre principale a été écartée, c'est l'offre `id` (ou, si elle est elle-même hors période, l'un de ses doublons) qui reprend sa place.
+    const relevee = await releverOffrePrincipale(racine, await chargerParametres(tx), { maintenant, acteur, tx, preferee: id });
+    await journaliser(
+      {
+        acteur, action: 'offre.doublon_lie', entite: 'offre', id,
+        resume: relevee ? `${relevee.ancienne} rattachée à ${relevee.reference}, publiée dans la période de recherche` : `${offre.reference} rattachée à ${principale.reference}`,
+      },
+      tx,
+    );
+    return relevee?.id === id ? { principale: 'celle-ci' as const, reference: relevee.ancienne } : { principale: 'autre' as const, reference: principale.reference };
   });
 }
 
-export async function dissocierDoublon(id: string, acteur: Acteur, maintenant = new Date()): Promise<void> {
-  await transaction(async (tx) => {
+/**
+ * Sens du rattachement que ferait lierDoublon(offre.id, principaleId), pour
+ * l'annoncer avant la confirmation : « celle-ci » quand l'autre annonce a été
+ * écartée (publiée avant le début de la recherche) alors que l'offre a été
+ * publiée dans la période — c'est alors l'autre qui lui serait rattachée.
+ */
+export async function sensRattachement(offre: Pick<Offre, 'published_at' | 'date_precision'>, principaleId: string, maintenant = new Date()): Promise<'autre' | 'celle-ci'> {
+  if (!/^[0-9a-f-]{36}$/i.test(principaleId) || !offre.published_at || offre.date_precision === 'inconnue') return 'autre';
+  const debut = new Date((await chargerParametres()).perimetre.dateMin);
+  const publieLe = new Date(offre.published_at).getTime();
+  if (publieLe < debut.getTime() || publieLe > maintenant.getTime() + TOLERANCE_FUTUR_MS) return 'autre';
+  // Mêmes conditions que la relève (serveur/perimetre) : l'offre principale visée est archivée pour sa date.
+  const racine = await uneLigne<{ ecartee: boolean | null }>(
+    `SELECT (r.status = 'archive' AND r.status_reason = 'hors_perimetre_date' AND r.published_at < $2) AS ecartee
+       FROM job_offers p JOIN job_offers r ON r.id = COALESCE(p.duplicate_of_id, p.id) WHERE p.id = $1`,
+    [principaleId, debut],
+  );
+  return racine?.ecartee ? 'celle-ci' : 'autre';
+}
+
+export async function dissocierDoublon(id: string, acteur: Acteur, maintenant = new Date()): Promise<{ statut: 'douteux' | 'archive' }> {
+  return transaction(async (tx) => {
     const offre = await charger(id, tx);
     if (!offre.duplicate_of_id) throw new ErreurOffre('Cette offre n’est pas un doublon.');
-    // Elle redevient « douteuse, à vérifier » : c'est le courtier qui la réactive en la vérifiant.
-    await executer(
-      `UPDATE job_offers SET duplicate_of_id = NULL, duplicate_score = NULL, status = 'douteux', status_reason = 'aucun', verification_status = 'a_verifier',
-              requires_human_review = true, status_changed_at = $2,
-              score_details = score_details - 'doublonProbable' WHERE id = $1`,
-      [id, maintenant],
-      tx,
-    );
-    await historiser(tx, id, 'fusion_doublon', { duplicate_of: ['lié', null], status: [offre.status, 'douteux'] }, acteur);
+    const parametres = await chargerParametres(tx);
+    // Publiée avant le début de la recherche : dissociée, elle reste archivée, pour ce motif cette fois.
+    const avantRecherche = Boolean(offre.published_at) && offre.date_precision !== 'inconnue' && new Date(offre.published_at!).getTime() < new Date(parametres.perimetre.dateMin).getTime();
+    if (avantRecherche) {
+      await executer(
+        `UPDATE job_offers SET duplicate_of_id = NULL, duplicate_score = NULL, status = 'archive', status_reason = 'hors_perimetre_date', requires_human_review = false, status_changed_at = $2,
+                score_details = score_details - 'doublonProbable' WHERE id = $1`,
+        [id, maintenant],
+        tx,
+      );
+      await historiser(tx, id, 'fusion_doublon', { duplicate_of: ['lié', null], status_reason: [offre.status_reason, 'hors_perimetre_date'] }, acteur);
+    } else {
+      // Elle redevient « douteuse, à vérifier » : c'est le courtier qui la réactive en la vérifiant.
+      await executer(
+        `UPDATE job_offers SET duplicate_of_id = NULL, duplicate_score = NULL, status = 'douteux', status_reason = 'aucun', verification_status = 'a_verifier',
+                requires_human_review = true, status_changed_at = $2,
+                score_details = score_details - 'doublonProbable' WHERE id = $1`,
+        [id, maintenant],
+        tx,
+      );
+      await historiser(tx, id, 'fusion_doublon', { duplicate_of: ['lié', null], status: [offre.status, 'douteux'] }, acteur);
+    }
     await journaliser({ acteur, action: 'offre.doublon_dissocie', entite: 'offre', id, resume: `${offre.reference} dissociée` }, tx);
+    return { statut: avantRecherche ? ('archive' as const) : ('douteux' as const) };
   });
 }
 
@@ -516,6 +571,8 @@ export async function corrigerOffre(id: string, c: CorrectionOffre, acteur: Acte
     }
     await historiser(tx, id, 'moderation', changements, acteur);
     await journaliser({ acteur, action: 'offre.correction', entite: 'offre', id, resume: `${offre.reference} corrigée`, changements: { champs: Object.keys(changements), statut: [offre.status, decision.statut] } }, tx);
+    // La date corrigée place l'offre avant le début de la recherche : si l'un de ses doublons a été publié dans la période, il prend sa place.
+    if (decision.motif === 'hors_perimetre_date' && !offre.duplicate_of_id) await releverOffrePrincipale(id, parametres, { maintenant, acteur, tx });
     return { statut: decision.statut, motif: decision.motif };
   });
 }

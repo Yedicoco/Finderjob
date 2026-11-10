@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { analyserOffre } from '@/collecte/pipeline';
-import { PARAMETRES_DEFAUT } from '@/domaine/parametres';
 import { creerExtracteurIA, validerComplement } from '@/ia/extracteur';
 import { EXEMPLES, PROMPT_SYSTEME, promptUtilisateur } from '@/ia/prompts';
+import { PARAMETRES_TESTS } from '../parametres';
 
 const MAINTENANT = new Date('2026-11-10T10:00:00Z');
 const reponse = (contenu: unknown, statut = 200) => new Response(JSON.stringify({ choices: [{ message: { content: typeof contenu === 'string' ? contenu : JSON.stringify(contenu) } }] }), { status: statut });
@@ -58,8 +58,8 @@ describe('complément IA (facultatif) — réponses simulées, aucun appel réel
   it('une réponse du modèle ne change ni le pays, ni la date, ni le salaire, ni le statut', () => {
     const politique = { kind: 'rss', collection_mode: 'extrait', store_contacts: false, country_default: null, reliability_score: 60, max_excerpt_chars: 300, keep_unclassified: false } as never;
     const brute = { idExterne: 'a', url: 'https://emplois.example/o/1', titre: 'Femme de ménage à Casablanca', texte: 'Famille à Casablanca cherche une femme de ménage. Salaire 3 500 DH par mois.', publieLe: new Date('2026-11-08T10:00:00Z'), precisionDate: 'exacte' as const };
-    const sans = analyserOffre(brute, politique, { maintenant: MAINTENANT, parametres: PARAMETRES_DEFAUT });
-    const avec = analyserOffre(brute, politique, { maintenant: MAINTENANT, parametres: PARAMETRES_DEFAUT, complementIA: { resume: 'Résumé proposé', contrat: 'cdi', nombrePostes: 3, ...( { pays: 'FR', salaire: 99999, statut: 'archive', ville: 'paris' } as object) } });
+    const sans = analyserOffre(brute, politique, { maintenant: MAINTENANT, parametres: PARAMETRES_TESTS });
+    const avec = analyserOffre(brute, politique, { maintenant: MAINTENANT, parametres: PARAMETRES_TESTS, complementIA: { resume: 'Résumé proposé', contrat: 'cdi', nombrePostes: 3, ...( { pays: 'FR', salaire: 99999, statut: 'archive', ville: 'paris' } as object) } });
     if (sans.type !== 'offre' || avec.type !== 'offre') throw new Error('offres attendues');
     for (const champ of ['city_code', 'salary_min', 'published_at', 'status', 'status_reason', 'risk_score'] as const) expect(avec.offre[champ]).toEqual(sans.offre[champ]);
     expect(avec.offre.score_details.pays).toEqual(sans.offre.score_details.pays);

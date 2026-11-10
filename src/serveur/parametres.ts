@@ -5,18 +5,22 @@
  * revérification) pour calculer le statut effectif : toute écriture est donc
  * validée et bornée ICI, afin que la base et le code voient la même valeur.
  */
-import { construireParametres, DESCRIPTIONS_PARAMETRES, PARAMETRES_DEFAUT, type Parametres } from '@/domaine/parametres';
+import { construireParametres, DEBUT_RECHERCHE_PLANCHER, DESCRIPTIONS_PARAMETRES, PARAMETRES_DEFAUT, type Parametres } from '@/domaine/parametres';
 import { journaliser, type Acteur } from './audit';
-import { executer, requete, type Executeur } from './db';
+import { executer, requete, transaction, type Executeur } from './db';
+import { appliquerDebutRecherche, type BilanPerimetre } from './perimetre';
 import { ErreurMetier } from '@/domaine/erreurs';
-import { dateSaisieMaroc } from '@/domaine/fuseau';
+import { dateSaisieMaroc, jourEcritMaroc } from '@/domaine/fuseau';
 
-type Regle = { type: 'entier'; min: number; max: number; defaut: number } | { type: 'booleen'; defaut: boolean } | { type: 'date'; defaut: string };
+/** Une date se règle entre `min` (plancher) et aujourd'hui. */
+type Regle = { type: 'entier'; min: number; max: number; defaut: number } | { type: 'booleen'; defaut: boolean } | { type: 'date'; min: string; defaut: string };
 
 const D = PARAMETRES_DEFAUT;
 
+export const CLE_DEBUT_RECHERCHE = 'perimetre.dateMin';
+
 export const REGLES_PARAMETRES: Record<string, Regle> = {
-  'perimetre.dateMin': { type: 'date', defaut: D.perimetre.dateMin },
+  [CLE_DEBUT_RECHERCHE]: { type: 'date', min: DEBUT_RECHERCHE_PLANCHER, defaut: D.perimetre.dateMin },
   'offres.duree_validite_jours': { type: 'entier', min: 7, max: 180, defaut: D.offres.dureeValiditeJours },
   'offres.delai_reverification_jours': { type: 'entier', min: 3, max: 90, defaut: D.offres.delaiReverificationJours },
   'offres.demi_vie_fraicheur_jours': { type: 'entier', min: 2, max: 60, defaut: D.offres.demiVieFraicheurJours },
@@ -62,7 +66,7 @@ export async function listerParametres(): Promise<LigneParametre[]> {
   }));
 }
 
-export function validerParametre(cle: string, brut: unknown): unknown {
+export function validerParametre(cle: string, brut: unknown, maintenant: Date = new Date()): unknown {
   const regle = Object.hasOwn(REGLES_PARAMETRES, cle) ? REGLES_PARAMETRES[cle] : undefined;
   if (!regle) throw new ErreurParametre(`Paramètre inconnu : ${cle.slice(0, 60)}`);
   if (regle.type === 'entier') {
@@ -82,29 +86,61 @@ export function validerParametre(cle: string, brut: unknown): unknown {
   // Un jour saisi (« 2026-03-01 ») commence à 00 h 00, heure de Casablanca.
   const date = dateSaisieMaroc(String(brut ?? ''), 'debut');
   if (!date) throw new ErreurParametre('Date invalide.');
-  // Le périmètre du cahier des charges est « à partir du 1er janvier 2026 » : on peut le resserrer, pas l'élargir.
-  if (date.getTime() < Date.parse(D.perimetre.dateMin)) throw new ErreurParametre('Le périmètre ne peut pas commencer avant le 1er janvier 2026.');
+  // Le cahier des charges fixe un plancher (1er janvier 2026) : la recherche peut commencer plus tard, jamais plus tôt.
+  if (date.getTime() < Date.parse(regle.min)) throw new ErreurParametre(`La recherche ne peut pas commencer avant le ${jourEcritMaroc(new Date(regle.min))}.`);
+  // Un début dans le futur écarterait toutes les offres, y compris celles d'aujourd'hui : c'est toujours une erreur de saisie.
+  if (date.getTime() > maintenant.getTime()) throw new ErreurParametre('La recherche ne peut pas commencer dans le futur : choisissez aujourd’hui ou une date passée.');
   return date.toISOString();
 }
 
-export async function definirParametre(cle: string, brut: unknown, acteur: Acteur, options: { justification?: string } = {}): Promise<void> {
-  const valeur = validerParametre(cle, brut);
+export type ResultatParametre = {
+  /** Renseigné quand le début de la recherche a changé : offres écartées et reprises aussitôt. */
+  offres: BilanPerimetre | null;
+};
+
+export async function definirParametre(cle: string, brut: unknown, acteur: Acteur, options: { justification?: string; maintenant?: Date } = {}): Promise<ResultatParametre> {
+  const maintenant = options.maintenant ?? new Date();
+  const valeur = validerParametre(cle, brut, maintenant);
   if (cle === 'commissions.travailleur_active' && valeur === true && (options.justification ?? '').trim().length < 20) {
     throw new ErreurParametre('Activer la commission côté travailleur exige une justification écrite (20 caractères au moins) : avis juridique, référence, date.');
   }
-  const avant = (await lireSurcharges())[cle] ?? REGLES_PARAMETRES[cle]!.defaut;
-  await executer(
-    `INSERT INTO app_settings (key, value, description, updated_by, updated_at) VALUES ($1, $2::jsonb, $3, $4, now())
-     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_by = EXCLUDED.updated_by, updated_at = now()`,
-    [cle, JSON.stringify(valeur), DESCRIPTIONS_PARAMETRES[cle] ?? '', acteur.id],
-  );
+  // Une seule transaction : le réglage, son effet sur les offres enregistrées et la trace au journal sont écrits ensemble ou pas du tout.
+  const resultat = await transaction(async (tx) => {
+    const avant = (await lireSurcharges(tx))[cle] ?? REGLES_PARAMETRES[cle]!.defaut;
+    await executer(
+      `INSERT INTO app_settings (key, value, description, updated_by, updated_at) VALUES ($1, $2::jsonb, $3, $4, now())
+       ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, description = EXCLUDED.description, updated_by = EXCLUDED.updated_by, updated_at = now()`,
+      [cle, JSON.stringify(valeur), DESCRIPTIONS_PARAMETRES[cle] ?? '', acteur.id],
+      tx,
+    );
+    await journaliser(
+      {
+        acteur,
+        action: 'parametre.modification',
+        entite: 'parametre',
+        id: cle,
+        resume: `Paramètre « ${cle} » modifié`,
+        changements: { avant, apres: valeur, ...(options.justification ? { justification: options.justification.trim().slice(0, 500) } : {}) },
+      },
+      tx,
+    );
+    // Le début de la recherche s'applique aussitôt aux offres déjà enregistrées.
+    const offres = cle === CLE_DEBUT_RECHERCHE ? await appliquerDebutRecherche(await chargerParametres(tx), { maintenant, acteur, tx }) : null;
+    return { offres };
+  });
   oublierParametres();
-  await journaliser({
-    acteur,
-    action: 'parametre.modification',
-    entite: 'parametre',
-    id: cle,
-    resume: `Paramètre « ${cle} » modifié`,
-    changements: { avant, apres: valeur, ...(options.justification ? { justification: options.justification.trim().slice(0, 500) } : {}) },
+  return resultat;
+}
+
+/**
+ * Aligne les offres enregistrées sur le début de la recherche en vigueur
+ * (relu en base à l'instant, sans passer par la copie mémorisée). Sans effet
+ * si tout est déjà aligné. Appelé au démarrage et à chaque maintenance : c'est
+ * ce qui applique une nouvelle valeur par défaut après une mise à jour.
+ */
+export async function alignerOffresSurDebutRecherche(options: { maintenant?: Date; acteur?: Acteur } = {}): Promise<BilanPerimetre & { debut: string }> {
+  return transaction(async (tx) => {
+    const parametres = await chargerParametres(tx);
+    return { ...(await appliquerDebutRecherche(parametres, { ...options, tx })), debut: parametres.perimetre.dateMin };
   });
 }

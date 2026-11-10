@@ -30,7 +30,8 @@ sont pas rapprochés systématiquement des postes ouverts.
 
 ## Périmètre
 
-- Pays : Maroc. Date : offres publiées depuis le 1er janvier 2026.
+- Pays : Maroc. Date : offres publiées depuis le début de la recherche — le lundi 9 novembre 2026 à
+  l'installation, réglable par un administrateur entre le 1er janvier 2026 et le jour même.
 - Secteurs : personnel de maison et services à la personne ; beauté, esthétique et bien-être ; conciergerie
   et hospitalité. 42 métiers classés.
 - 47 villes reconnues, avec leurs quartiers pour les zones prioritaires.

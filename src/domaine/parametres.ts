@@ -3,7 +3,11 @@
  * table app_settings (écran Administration → Paramètres) sans redéployer.
  *
  * Origine des chiffres
- *   - Périmètre : cahier des charges (Maroc uniquement, année cible 2026).
+ *   - Périmètre : cahier des charges (Maroc uniquement, année cible 2026). Le
+ *     début de la recherche a été ramené au lundi 9 novembre 2026 (semaine en
+ *     cours) à la demande de Yallah Services, le 10/11/2026. Il se règle dans
+ *     Administration → Paramètres, sans jamais remonter avant le plancher du
+ *     cahier des charges (1er janvier 2026).
  *   - SMIG : 17,92 DH/h au 1er janvier 2026, soit 3 422,72 DH bruts par mois
  *     pour 191 h (décret n° 2.25.983, Bulletin officiel n° 7469). Chiffre
  *     relevé le 10/11/2026 dans trois sources secondaires concordantes
@@ -21,10 +25,26 @@
 export const SMIG_MENSUEL_BRUT_2026 = 3422.72;
 export const SMIG_HORAIRE_2026 = 17.92;
 
+/**
+ * Plancher du cahier des charges : la recherche ne remonte jamais avant le
+ * 1er janvier 2026 à 00 h 00, heure de Casablanca (le Maroc était alors à UTC+1).
+ */
+export const DEBUT_RECHERCHE_PLANCHER = '2026-01-01T00:00:00+01:00';
+/**
+ * Début de la recherche à l'installation : lundi 9 novembre 2026 à 00 h 00,
+ * heure de Casablanca (UTC+0 depuis le 20 septembre 2026). Date fixe : elle
+ * n'avance pas d'elle-même, c'est un administrateur qui la déplace.
+ */
+export const DEBUT_RECHERCHE_DEFAUT = '2026-11-09T00:00:00+00:00';
+
 export type Parametres = {
   perimetre: {
     pays: 'MA';
-    /** Début du périmètre : 1er janvier 2026 à 00 h 00, heure de Casablanca (le Maroc était alors à UTC+1). */
+    /**
+     * Début de la recherche : une annonce publiée avant cet instant est hors
+     * périmètre (archivée). Toujours à 00 h 00, heure de Casablanca, et jamais
+     * avant DEBUT_RECHERCHE_PLANCHER.
+     */
     dateMin: string;
     fuseau: 'Africa/Casablanca';
   };
@@ -62,7 +82,7 @@ export type Parametres = {
 };
 
 export const PARAMETRES_DEFAUT: Parametres = {
-  perimetre: { pays: 'MA', dateMin: '2026-01-01T00:00:00+01:00', fuseau: 'Africa/Casablanca' },
+  perimetre: { pays: 'MA', dateMin: DEBUT_RECHERCHE_DEFAUT, fuseau: 'Africa/Casablanca' },
   offres: { dureeValiditeJours: 45, delaiReverificationJours: 21, demiVieFraicheurJours: 10 },
   salaires: {
     smigMensuelBrut: SMIG_MENSUEL_BRUT_2026,
@@ -88,7 +108,7 @@ export const PARAMETRES_DEFAUT: Parametres = {
 
 /** Clés stockées dans app_settings (notation pointée) et leur description. */
 export const DESCRIPTIONS_PARAMETRES: Record<string, string> = {
-  'perimetre.dateMin': 'Date à partir de laquelle une offre est dans le périmètre (2026).',
+  'perimetre.dateMin': 'Début de la recherche : les annonces publiées avant cette date sont écartées.',
   'offres.duree_validite_jours': 'Durée de validité d’une offre sans date d’expiration (jours).',
   'offres.delai_reverification_jours': 'Délai au-delà duquel une offre active non revue devient douteuse (jours).',
   'offres.demi_vie_fraicheur_jours': 'Demi-vie du score de fraîcheur (jours).',
@@ -105,15 +125,21 @@ function nombre(valeur: unknown, defaut: number, min: number, max: number): numb
   return typeof valeur === 'number' && Number.isFinite(valeur) && valeur >= min && valeur <= max ? valeur : defaut;
 }
 
+/** Une date de début enregistrée n'est retenue que si elle est lisible et ne précède pas le plancher. */
+function debutRecherche(valeur: unknown, defaut: string): string {
+  if (typeof valeur !== 'string') return defaut;
+  const instant = Date.parse(valeur);
+  return Number.isNaN(instant) || instant < Date.parse(DEBUT_RECHERCHE_PLANCHER) ? defaut : valeur;
+}
+
 /** Fusionne les valeurs de app_settings avec les valeurs par défaut (en les bornant). */
 export function construireParametres(surcharges: Surcharges = {}): Parametres {
   const d = PARAMETRES_DEFAUT;
-  const dateMin = surcharges['perimetre.dateMin'];
   return {
     ...d,
     perimetre: {
       ...d.perimetre,
-      dateMin: typeof dateMin === 'string' && !Number.isNaN(Date.parse(dateMin)) ? dateMin : d.perimetre.dateMin,
+      dateMin: debutRecherche(surcharges['perimetre.dateMin'], d.perimetre.dateMin),
     },
     offres: {
       dureeValiditeJours: nombre(surcharges['offres.duree_validite_jours'], d.offres.dureeValiditeJours, 7, 180),

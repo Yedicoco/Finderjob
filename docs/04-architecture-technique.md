@@ -33,7 +33,8 @@ src/collecte/         client HTTP « poli », robots.txt, connecteurs RSS / site
                       pipeline d'analyse (pur)
 src/ia/               complément d'extraction par modèle de langage (facultatif)
 src/serveur/          accès à la base, un module par sujet : offres, candidats, employeurs,
-                      appariements, placements, alertes, sources, ingestion, auth, audit…
+                      appariements, placements, alertes, sources, ingestion, perimetre (début de la
+                      recherche), auth, audit…
 src/app/              pages, formulaires et actions (Next.js)
 src/composants/       composants d'interface partagés
 src/proxy.ts          en-têtes de sécurité, CSP avec nonce, redirection vers la connexion
@@ -55,6 +56,11 @@ base.
 5. **Enregistrement** avec une version à chaque changement (salaire, date, statut).
 6. **Lecture** : le statut affiché est recalculé à chaque lecture par la vue `v_job_offers` (une offre expire
    sans attendre le worker).
+7. **Début de la recherche** : une annonce publiée avant cette date est enregistrée archivée. Quand la date
+   change, les offres déjà enregistrées sont alignées dans la même transaction que le réglage
+   (`src/serveur/perimetre.ts`) : écartées, ou reprises avec le statut qu'elles auraient eu à
+   l'enregistrement. Le même alignement est rejoué au démarrage et à chaque maintenance ; il est sans effet
+   quand tout est déjà en ordre.
 
 ## Lancer en local
 

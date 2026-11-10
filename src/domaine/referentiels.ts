@@ -100,7 +100,7 @@ export const MOTIFS_STATUT = creerReferentiel({
   aucun: '',
   date_inconnue: 'Date inconnue',
   date_incoherente: 'Date incohérente',
-  hors_perimetre_date: 'Hors périmètre (antérieure à 2026)',
+  hors_perimetre_date: 'Avant le début de la recherche',
   localisation_inconnue: 'Lieu non confirmé au Maroc',
   expiree_source: 'Expirée selon la source',
   expiree_anciennete: 'Trop ancienne',

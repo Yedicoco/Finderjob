@@ -26,7 +26,7 @@ français, arabe et anglais.
 | Situation | Statut | Vérification humaine |
 | --- | --- | --- |
 | Date de publication inconnue ou incohérente | Douteuse | Oui |
-| Publiée avant le 1er janvier 2026 | Archivée (hors périmètre) | Non |
+| Publiée avant le début de la recherche | Archivée (hors périmètre) | Non |
 | Doublon d'une autre offre | Archivée, rattachée à l'offre principale | Non |
 | Lieu non confirmé au Maroc | Douteuse | Oui |
 | Risque élevé | Douteuse | Oui, avec note écrite |
@@ -36,6 +36,20 @@ français, arabe et anglais.
 Le statut affiché est recalculé à chaque lecture : une offre active expire d'elle-même, et redevient
 « douteuse » si elle n'a pas été revérifiée depuis 21 jours. **Sans date connue, une offre n'est jamais
 active.**
+
+**Début de la recherche.** C'est un paramètre : lundi 9 novembre 2026 à 00 h 00, heure de Casablanca, à
+l'installation ; réglable entre le 1er janvier 2026 et le jour même. Quand il change, les offres déjà
+enregistrées sont alignées aussitôt :
+
+- **écartées** — toute offre datée, publiée avant le nouveau début et pas encore archivée, devient « archivée :
+  avant le début de la recherche ». Elle quitte la liste des offres actives et la file de vérification ; une
+  vérification déjà faite par un courtier reste acquise ;
+- **reprises** — toute offre archivée pour ce seul motif et de nouveau dans la période retrouve le statut que
+  donnent les règles du tableau ci-dessus (active, douteuse, expirée), avec les mêmes demandes de
+  vérification qu'à l'enregistrement.
+
+Les offres sans date, les doublons et les offres archivées par un courtier ne sont pas concernés. Une offre
+écartée ne peut pas être rouverte à la main ; corriger une date mal relevée la fait revenir.
 
 ## 3. Score de risque (0 à 100)
 
@@ -104,6 +118,20 @@ calibrée.
 
 La comparaison se limite aux offres des 30 derniers jours. Un courtier peut toujours dissocier deux offres
 rattachées à tort.
+
+**Doublons et début de la recherche.** Une annonce publiée dans la période n'est jamais masquée par une
+annonce plus ancienne que le début de la recherche :
+
+- à l'enregistrement, si la seule annonce identique a été écartée pour sa date, la nouvelle devient l'offre
+  principale et c'est l'ancienne qui lui est rattachée ;
+- quand le début de la recherche avance, une offre principale écartée cède la place au plus ancien de ses
+  doublons publiés dans la période ;
+- un rattachement fait à la main vers une annonce écartée est inversé de la même façon ;
+- une ressemblance seulement probable avec une annonce écartée n'est pas signalée au courtier.
+
+Une annonce publiée avant le début de la recherche, elle, est rattachée à l'offre qui lui ressemble comme
+n'importe quel doublon. Si la date est ensuite reculée, les rattachements restent en place : il n'y a
+toujours qu'une offre visible par annonce.
 
 ## 6. Rapprochement candidat-poste (0 à 100)
 

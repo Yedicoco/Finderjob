@@ -1,8 +1,9 @@
 import type { Metadata } from 'next';
 import { BoutonAction, BoutonEnvoi, Formulaire } from '@/composants/formulaire';
-import { dateCourte, dateIso, dirhams, nombre } from '@/composants/format';
+import { dateIso, dateLongue, dirhams, nombre } from '@/composants/format';
 import { Badge, Carte, EnTetePage, Encart } from '@/composants/ui';
 import { AVERTISSEMENT_COMMISSION_TRAVAILLEUR } from '@/domaine/commissions';
+import { jourEcritMaroc } from '@/domaine/fuseau';
 import { canauxDisponibles } from '@/serveur/alertes';
 import { configIADepuisEnv } from '@/ia/extracteur';
 import { chargerParametres, listerParametres, type LigneParametre } from '@/serveur/parametres';
@@ -12,16 +13,21 @@ import { definirParametreAction, executerTachesAction } from '../actions';
 export const metadata: Metadata = { title: 'Paramètres' };
 
 const GROUPES: { titre: string; aide: string; prefixe: string }[] = [
-  { titre: 'Périmètre et durée de vie des offres', aide: 'Ces valeurs décident de ce qui est « actif », « expiré » ou « douteux ». Un changement s’applique immédiatement à toutes les offres.', prefixe: 'perimetre.|offres.' },
+  {
+    titre: 'Période de recherche et durée de vie des offres',
+    aide: 'Ces valeurs décident de ce qui est « actif », « expiré », « douteux » ou archivé. Un changement s’applique immédiatement à toutes les offres. Début de la recherche : une date plus récente archive les offres publiées avant elle (rien n’est supprimé) ; une date plus ancienne les fait revenir.',
+    prefixe: 'perimetre.|offres.',
+  },
   { titre: 'Seuils de salaire', aide: 'Servent aux signaux de risque. Le plancher du travail domestique dépend du SMIG : mettez-le à jour à chaque revalorisation officielle.', prefixe: 'salaires.' },
   { titre: 'Candidats', aide: 'Durée de conservation d’une fiche sans activité avant anonymisation automatique (loi n° 09-08).', prefixe: 'candidats.' },
 ];
 
-function LigneReglage({ ligne }: { ligne: LigneParametre }) {
+function LigneReglage({ ligne, aujourdhui }: { ligne: LigneParametre; aujourdhui: Date }) {
   const { regle } = ligne;
-  const defaut = regle.type === 'date' ? dateCourte(regle.defaut) : regle.type === 'entier' ? nombre(regle.defaut) : String(regle.defaut);
+  const defaut = regle.type === 'date' ? dateLongue(regle.defaut) : regle.type === 'entier' ? nombre(regle.defaut) : String(regle.defaut);
   // Un champ date n'accepte que « AAAA-MM-JJ » : on lui donne le jour de Casablanca, pas l'instant complet.
   const valeur = regle.type === 'date' ? dateIso(String(ligne.valeur)) : String(ligne.valeur);
+  const bornes = regle.type === 'entier' ? `De ${nombre(regle.min)} à ${nombre(regle.max)}. ` : regle.type === 'date' ? `Du ${jourEcritMaroc(new Date(regle.min))} à aujourd’hui. ` : '';
   return (
     <li className="px-4 py-4 sm:px-5">
       <Formulaire action={definirParametreAction} className="grid gap-x-4 gap-y-2 sm:grid-cols-[minmax(0,1fr)_11rem_auto] sm:items-end" messageEnBas>
@@ -32,7 +38,7 @@ function LigneReglage({ ligne }: { ligne: LigneParametre }) {
             {ligne.description}
           </label>
           <p className="text-[0.8rem] text-encre-douce">
-            {regle.type === 'entier' ? `De ${nombre(regle.min)} à ${nombre(regle.max)}. ` : ''}
+            {bornes}
             Valeur d’origine : {defaut}. {ligne.personnalise ? <Badge ton="or">Modifié</Badge> : null}
           </p>
         </div>
@@ -43,7 +49,8 @@ function LigneReglage({ ligne }: { ligne: LigneParametre }) {
           required
           type={ligne.regle.type === 'date' ? 'date' : 'text'}
           inputMode={ligne.regle.type === 'entier' ? 'numeric' : undefined}
-          min={regle.type === 'date' ? dateIso(regle.defaut) : undefined}
+          min={regle.type === 'date' ? dateIso(regle.min) : undefined}
+          max={regle.type === 'date' ? dateIso(aujourdhui) : undefined}
           defaultValue={valeur}
         />
         <BoutonEnvoi variante="secondaire">Enregistrer</BoutonEnvoi>
@@ -55,6 +62,7 @@ function LigneReglage({ ligne }: { ligne: LigneParametre }) {
 export default async function PageParametres() {
   await exigerPermission('parametres.gerer');
   const [lignes, parametres] = await Promise.all([listerParametres(), chargerParametres()]);
+  const aujourdhui = new Date();
   const canaux = canauxDisponibles();
   const ia = configIADepuisEnv();
   const travailleur = lignes.find((ligne) => ligne.cle === 'commissions.travailleur_active')!;
@@ -75,7 +83,7 @@ export default async function PageParametres() {
               <p className="px-4 pt-1 pb-2 text-[0.86rem] text-encre-douce sm:px-5">{groupe.aide}</p>
               <ul className="divide-y divide-sable-200 border-t border-sable-200">
                 {duGroupe.map((ligne) => (
-                  <LigneReglage key={ligne.cle} ligne={ligne} />
+                  <LigneReglage key={ligne.cle} ligne={ligne} aujourdhui={aujourdhui} />
                 ))}
               </ul>
             </Carte>

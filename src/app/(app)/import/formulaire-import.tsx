@@ -107,11 +107,11 @@ function Apercu({ apercu }: { apercu: ApercuVue }) {
                   <ul className="mt-1 space-y-1">
                     {offre.doublons.map((doublon) => (
                       <li key={doublon.id} className="text-ambre-800">
-                        {doublon.certain ? 'Doublon de ' : 'Ressemble à '}
+                        {doublon.role === 'doublon' ? 'Doublon de ' : doublon.role === 'remplace' ? 'Prend la place de ' : 'Ressemble à '}
                         <Link href={`/offres/${doublon.id}`} className="font-semibold underline">
                           {doublon.reference}
-                        </Link>{' '}
-                        ({doublon.score} %) <span dir="auto">— {doublon.titre}</span>
+                        </Link>
+                        {doublon.role === 'remplace' ? ', publiée avant le début de la recherche' : ''} ({doublon.score} %) <span dir="auto">— {doublon.titre}</span>
                       </li>
                     ))}
                   </ul>

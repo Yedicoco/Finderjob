@@ -6,7 +6,9 @@
    suggérés, commissions à encaisser, notifications) puis les offres à traiter en priorité.
 2. **Vérifier une offre.** La fiche indique pourquoi elle demande une vérification : date inconnue, lieu non
    confirmé, risque, doublon probable. Le courtier corrige ce qui manque, confirme, écarte ou archive. Une
-   offre à risque élevé ne peut être validée qu'avec une note écrite.
+   offre à risque élevé ne peut être validée qu'avec une note écrite. Une offre archivée parce qu'elle a été
+   publiée avant le début de la recherche ne se rouvre pas à la main ; si sa date a été mal relevée, la
+   corriger sur la fiche suffit à la reprendre.
 3. **Ajouter une offre.** Coller le texte d'une annonce : l'outil montre un aperçu (métier, ville, salaire,
    date, risque) avant d'enregistrer. D'un site, seuls un extrait et le lien sont gardés ; d'un employeur, le
    texte complet.
@@ -36,7 +38,7 @@
 | Tableau de bord | `/tableau-de-bord` | Tous (montants masqués au lecteur) |
 | Sources et collecte | `/administration/sources` | Administrateur |
 | Utilisateurs | `/administration/utilisateurs` | Administrateur |
-| Paramètres | `/administration/parametres` | Administrateur |
+| Paramètres, dont le début de la recherche | `/administration/parametres` | Administrateur |
 | Journal d'audit | `/administration/journal` | Administrateur |
 | Jeu de démonstration | `/administration/demonstration` | Administrateur |
 | Mon compte | `/compte` | Tous |

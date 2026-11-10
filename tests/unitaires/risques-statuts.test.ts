@@ -1,11 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { extraire } from '@/domaine/extraction';
-import { PARAMETRES_DEFAUT, construireParametres } from '@/domaine/parametres';
+import { dateSaisieMaroc } from '@/domaine/fuseau';
+import { DEBUT_RECHERCHE_DEFAUT, DEBUT_RECHERCHE_PLANCHER, PARAMETRES_DEFAUT, construireParametres } from '@/domaine/parametres';
 import { evaluerRisque, evaluerSalaire } from '@/domaine/risques';
-import { ageEnJours, statutEffectif, statutInitial } from '@/domaine/statuts';
+import { MOTIFS_HORS_PERIODE, ageEnJours, statutEffectif, statutInitial } from '@/domaine/statuts';
+import { PARAMETRES_TESTS } from '../parametres';
 
 const MAINTENANT = new Date('2026-11-10T10:00:00Z');
-const P = PARAMETRES_DEFAUT;
+// Début de la recherche épinglé au 1er janvier 2026 : voir tests/parametres.ts.
+const P = PARAMETRES_TESTS;
 
 function risque(titre: string, texte: string, contexte: Partial<{ villeConnue: boolean; employeurConnu: boolean; dateConnue: boolean }> = {}) {
   return evaluerRisque({
@@ -119,6 +122,23 @@ describe('statut initial d’une offre', () => {
     expect(statutInitial({ ...base, publieLe: new Date('2025-12-31T23:00:00Z') })).toMatchObject({ statut: 'expire', motif: 'expiree_anciennete' });
   });
 
+  it('début de la recherche par défaut (lundi 9 novembre 2026) : la veille au soir est écartée, minuit est retenu', () => {
+    const defaut = { ...base, parametres: PARAMETRES_DEFAUT };
+    expect(statutInitial({ ...defaut, publieLe: new Date('2026-11-08T23:59:59Z') })).toEqual({ statut: 'archive', motif: 'hors_perimetre_date', verification: 'non_requise', revueHumaine: false });
+    expect(statutInitial({ ...defaut, publieLe: new Date('2026-11-09T00:00:00Z') })).toEqual({ statut: 'actif', motif: 'aucun', verification: 'non_requise', revueHumaine: false });
+    // La même annonce du dimanche 8 novembre reste active tant que la recherche commence plus tôt.
+    expect(statutInitial({ ...base, publieLe: new Date('2026-11-08T23:59:59Z') })).toMatchObject({ statut: 'actif' });
+  });
+
+  it('une annonce écartée par le début de la recherche l’est quels que soient ses autres défauts, sauf l’absence de date', () => {
+    const ancienne = { ...base, parametres: PARAMETRES_DEFAUT, publieLe: new Date('2026-11-06T09:00:00Z') };
+    expect(statutInitial({ ...ancienne, scoreRisque: 90 })).toMatchObject({ statut: 'archive', motif: 'hors_perimetre_date' });
+    expect(statutInitial({ ...ancienne, estDoublonDe: true })).toMatchObject({ statut: 'archive', motif: 'hors_perimetre_date' });
+    expect(statutInitial({ ...ancienne, pays: 'inconnu', villeConnue: false })).toMatchObject({ statut: 'archive', motif: 'hors_perimetre_date' });
+    // Sans date fiable, impossible de dire si l'annonce précède la recherche : elle reste à vérifier.
+    expect(statutInitial({ ...ancienne, publieLe: null, precisionDate: 'inconnue' })).toMatchObject({ statut: 'douteux', motif: 'date_inconnue' });
+  });
+
   it('expirée selon la source ou par ancienneté', () => {
     expect(statutInitial({ ...base, expireLe: new Date('2026-11-09T00:00:00Z') })).toMatchObject({ statut: 'expire', motif: 'expiree_source' });
     expect(statutInitial({ ...base, publieLe: new Date('2026-09-01T00:00:00Z') })).toMatchObject({ statut: 'expire', motif: 'expiree_anciennete' });
@@ -129,6 +149,24 @@ describe('statut initial d’une offre', () => {
   it('lieu inconnu ou risque élevé → douteuse avec revue humaine', () => {
     expect(statutInitial({ ...base, pays: 'inconnu', villeConnue: false })).toMatchObject({ statut: 'douteux', motif: 'localisation_inconnue', revueHumaine: true });
     expect(statutInitial({ ...base, scoreRisque: 60 })).toMatchObject({ statut: 'douteux', motif: 'risque_eleve', revueHumaine: true });
+  });
+
+  it('dit par son motif si l’annonce a une date fiable dans la période de recherche', () => {
+    const horsPeriode = (entree: Parameters<typeof statutInitial>[0]) => MOTIFS_HORS_PERIODE.includes(statutInitial(entree).motif);
+    const defaut = { ...base, parametres: PARAMETRES_DEFAUT };
+    // Hors période : sans date, date dans le futur, publiée avant le début de la recherche.
+    expect(horsPeriode({ ...defaut, publieLe: null, precisionDate: 'inconnue' })).toBe(true);
+    expect(horsPeriode({ ...defaut, publieLe: new Date('2026-12-25T00:00:00Z') })).toBe(true);
+    expect(horsPeriode({ ...defaut, publieLe: new Date('2026-11-08T23:59:59Z') })).toBe(true);
+    // Dans la période, quel que soit le statut : active, douteuse, expirée, doublon.
+    const lundi = { ...defaut, publieLe: new Date('2026-11-09T00:00:00Z') };
+    expect(horsPeriode(lundi)).toBe(false);
+    expect(horsPeriode({ ...lundi, scoreRisque: 90 })).toBe(false);
+    expect(horsPeriode({ ...lundi, pays: 'inconnu', villeConnue: false })).toBe(false);
+    expect(horsPeriode({ ...lundi, expireLe: new Date('2026-11-09T12:00:00Z') })).toBe(false);
+    expect(horsPeriode({ ...lundi, estDoublonDe: true })).toBe(false);
+    // Une date à peine en avance (horloge de la source) reste dans la période.
+    expect(horsPeriode({ ...defaut, publieLe: new Date('2026-11-11T09:00:00Z') })).toBe(false);
   });
 
   it('doublon → archivé', () => {
@@ -178,12 +216,36 @@ describe('statut effectif (recalculé à la lecture)', () => {
 
 describe('paramètres', () => {
   it('a des valeurs par défaut conformes au cahier des charges', () => {
-    expect(P.perimetre.pays).toBe('MA');
-    expect(new Date(P.perimetre.dateMin).toISOString()).toBe('2025-12-31T23:00:00.000Z');
-    expect(P.commissions.travailleurActive).toBe(false);
-    expect(P.candidats.conservationMois).toBe(12);
-    expect(P.commissions.formules.premium).toMatchObject({ montant: 1000, remplacementMois: 6 });
-    expect(P.commissions.formules.serenite).toMatchObject({ montant: 500, remplacementMois: 2 });
+    const D = PARAMETRES_DEFAUT;
+    expect(D.perimetre.pays).toBe('MA');
+    expect(D.commissions.travailleurActive).toBe(false);
+    expect(D.candidats.conservationMois).toBe(12);
+    expect(D.commissions.formules.premium).toMatchObject({ montant: 1000, remplacementMois: 6 });
+    expect(D.commissions.formules.serenite).toMatchObject({ montant: 500, remplacementMois: 2 });
+  });
+
+  it('fait commencer la recherche le lundi 9 novembre 2026 à 00 h 00, heure de Casablanca', () => {
+    const debut = new Date(PARAMETRES_DEFAUT.perimetre.dateMin);
+    expect(PARAMETRES_DEFAUT.perimetre.dateMin).toBe(DEBUT_RECHERCHE_DEFAUT);
+    expect(debut.toISOString()).toBe('2026-11-09T00:00:00.000Z');
+    // Même instant que la date saisie dans les paramètres : le formulaire et la valeur d'origine ne peuvent pas diverger.
+    expect(dateSaisieMaroc('2026-11-09', 'debut')?.getTime()).toBe(debut.getTime());
+    expect(debut.getUTCDay()).toBe(1);
+    expect(construireParametres().perimetre.dateMin).toBe(DEBUT_RECHERCHE_DEFAUT);
+  });
+
+  it('ne remonte jamais avant le 1er janvier 2026, plancher du cahier des charges', () => {
+    const plancher = new Date(DEBUT_RECHERCHE_PLANCHER);
+    expect(plancher.toISOString()).toBe('2025-12-31T23:00:00.000Z');
+    expect(dateSaisieMaroc('2026-01-01', 'debut')?.getTime()).toBe(plancher.getTime());
+    expect(plancher.getTime()).toBeLessThan(Date.parse(DEBUT_RECHERCHE_DEFAUT));
+    // Le plancher lui-même et toute date postérieure sont retenus…
+    expect(construireParametres({ 'perimetre.dateMin': '2025-12-31T23:00:00.000Z' }).perimetre.dateMin).toBe('2025-12-31T23:00:00.000Z');
+    expect(construireParametres({ 'perimetre.dateMin': '2026-06-01T00:00:00+01:00' }).perimetre.dateMin).toBe('2026-06-01T00:00:00+01:00');
+    // … une date antérieure, illisible ou d'un autre type est ignorée : la valeur d'origine s'applique.
+    for (const invalide of ['2025-12-31T22:59:59.000Z', '2025-06-01T00:00:00Z', 'bientôt', '', 20261109, null, undefined]) {
+      expect(construireParametres({ 'perimetre.dateMin': invalide }).perimetre.dateMin).toBe(DEBUT_RECHERCHE_DEFAUT);
+    }
   });
 
   it('borne les surcharges et ignore les valeurs invalides', () => {

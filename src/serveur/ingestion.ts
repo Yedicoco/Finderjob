@@ -20,14 +20,16 @@ import { ClientPoli, ErreurCollecte } from '@/collecte/http';
 import { analyserOffre, type ComplementIA, type OffreAnalysee, type PolitiqueSource, type ResultatAnalyse } from '@/collecte/pipeline';
 import { resumerRobots } from '@/collecte/robots';
 import type { MotifRejet, OffreBrute, Source } from '@/collecte/types';
-import { deciderDoublon, similarite, urlCanonique, type OffreComparable } from '@/domaine/doublons';
+import { deciderDoublon, deciderRattachement, similarite, urlCanonique, type OffreComparable } from '@/domaine/doublons';
 import type { Parametres } from '@/domaine/parametres';
+import { MOTIFS_HORS_PERIODE } from '@/domaine/statuts';
 import { accord, compter } from '@/domaine/accord';
 import { sha256 } from '@/domaine/texte';
 import { ACTEUR_SYSTEME, journaliser, type Acteur } from './audit';
 import { chiffrer } from './chiffrement';
 import { executer, prochaineReference, requete, transaction, uneLigne, type Executeur } from './db';
 import { chargerParametres } from './parametres';
+import { rattacherAncienne } from './perimetre';
 import { idsCategories, idsCompetences } from './referentiel';
 import { ErreurSource, obstaclesActivation, sourceParCode, sourceParId, type SourceComplete } from './sources';
 import { ErreurMetier } from '@/domaine/erreurs';
@@ -60,6 +62,8 @@ export type ResultatEnregistrement = {
   champsModifies?: string[];
   doublonDe?: { id: string; reference: string; score: number } | null;
   doublonProbable?: { id: string; reference: string; score: number; titre: string } | null;
+  /** Même annonce, publiée avant le début de la recherche : elle est désormais rattachée à celle-ci. */
+  remplace?: { id: string; reference: string } | null;
 };
 
 export type ContexteEnregistrement = {
@@ -88,9 +92,19 @@ function comparable(valeur: unknown): string {
   return typeof valeur === 'object' ? JSON.stringify(valeur) : String(valeur);
 }
 
-export type DoublonTrouve = { id: string; reference: string; titre: string; score: number; decision: 'doublon' | 'probable'; raisons: string[] };
+export type DoublonTrouve = {
+  id: string; reference: string; titre: string; score: number; decision: 'doublon' | 'probable'; raisons: string[];
+  /** L'offre principale trouvée est archivée parce qu'elle a été publiée avant le début de la recherche. */
+  horsPeriode: boolean;
+};
 
-/** Offres existantes qui ressemblent à cette analyse (aucune écriture). */
+/**
+ * Offres déjà enregistrées qui ressemblent à l'annonce, de la plus à la moins
+ * ressemblante. Chaque ligne désigne une offre PRINCIPALE (celle à laquelle
+ * l'annonce serait rattachée), citée une seule fois même si plusieurs de ses
+ * doublons ressemblent à l'annonce. `exclureId` écarte une offre — l'annonce
+ * elle-même, déjà enregistrée — et ses propres doublons.
+ */
 export async function chercherDoublons(offre: OffreAnalysee, contexte: { maintenant: Date; parametres: Parametres; exclureId?: string | null; estDemo?: boolean }, tx?: Executeur): Promise<DoublonTrouve[]> {
   const categories = await idsCategories(tx);
   const categorie = offre.categories[0] ? (categories.get(offre.categories[0].code) ?? null) : null;
@@ -99,14 +113,15 @@ export async function chercherDoublons(offre: OffreAnalysee, contexte: { mainten
   const lignes = await requete<{
     id: string; reference: string; title: string; employer_normalized: string | null; city_code: string | null; metier: string | null;
     published_at: Date | null; content_language: string; salary_min: number | null; canonical_url: string | null; description: string | null;
-    duplicate_of_id: string | null; racine_reference: string | null;
+    duplicate_of_id: string | null; racine_reference: string | null; hors_periode: boolean;
   }>(
     `SELECT o.id, o.reference, o.title, o.employer_normalized, o.city_code, c.code AS metier, o.published_at, o.content_language, o.salary_min,
-            o.canonical_url, COALESCE(o.description_full, o.description_excerpt) AS description, o.duplicate_of_id, r.reference AS racine_reference
+            o.canonical_url, COALESCE(o.description_full, o.description_excerpt) AS description, o.duplicate_of_id, r.reference AS racine_reference,
+            (COALESCE(r.status, o.status) = 'archive' AND COALESCE(r.status_reason, o.status_reason) = 'hors_perimetre_date') AS hors_periode
        FROM job_offers o
        LEFT JOIN job_categories c ON c.id = o.primary_category_id
        LEFT JOIN job_offers r ON r.id = o.duplicate_of_id
-      WHERE ($1::uuid IS NULL OR o.id <> $1)
+      WHERE ($1::uuid IS NULL OR (o.id <> $1 AND o.duplicate_of_id IS DISTINCT FROM $1))
         AND o.is_demo = $2
         AND o.status_reason <> 'rejetee_moderation'
         AND (
@@ -134,9 +149,15 @@ export async function chercherDoublons(offre: OffreAnalysee, contexte: { mainten
     const decision = deciderDoublon(resultat.score, contexte.parametres.doublons);
     if (decision === 'distinct') continue;
     // On rattache toujours à la racine : jamais de chaîne « doublon d'un doublon ».
-    trouves.push({ id: ligne.duplicate_of_id ?? ligne.id, reference: ligne.racine_reference ?? ligne.reference, titre: ligne.title, score: Math.round(resultat.score * 100), decision, raisons: resultat.raisons });
+    trouves.push({
+      id: ligne.duplicate_of_id ?? ligne.id, reference: ligne.racine_reference ?? ligne.reference, titre: ligne.title, score: Math.round(resultat.score * 100), decision,
+      raisons: resultat.raisons, horsPeriode: ligne.hors_periode,
+    });
   }
-  return trouves.sort((a, b) => b.score - a.score);
+  // Une ligne par offre principale : la ressemblance la plus forte, qu'elle vienne d'elle ou de l'un de ses doublons.
+  const parOffrePrincipale = new Map<string, DoublonTrouve>();
+  for (const trouve of trouves.sort((a, b) => b.score - a.score)) if (!parOffrePrincipale.has(trouve.id)) parOffrePrincipale.set(trouve.id, trouve);
+  return [...parOffrePrincipale.values()];
 }
 
 async function ecrireLiens(id: string, offre: OffreAnalysee, tx: Executeur): Promise<string | null> {
@@ -214,8 +235,8 @@ async function enregistrerDansTransaction(offre: OffreAnalysee, contexte: Contex
 
   // -------------------------------------------------------------------- nouvelle --
   const doublons = await chercherDoublons(offre, { maintenant, parametres: contexte.parametres, estDemo: contexte.estDemo }, tx);
-  const lie = doublons.find((doublon) => doublon.decision === 'doublon') ?? null;
-  const probable = lie ? null : (doublons[0] ?? null);
+  // Une annonce de la période n'est jamais masquée par une annonce plus ancienne que le début de la recherche (voir deciderRattachement).
+  const { lie, remplacees, probable } = deciderRattachement(!MOTIFS_HORS_PERIODE.includes(offre.status_reason), doublons);
   const statut = lie ? 'archive' : offre.status;
   const motif = lie ? 'doublon' : offre.status_reason;
   const details = { ...offre.score_details, ...(probable ? { doublonProbable: { id: probable.id, reference: probable.reference, score: probable.score } } : {}) };
@@ -256,7 +277,16 @@ async function enregistrerDansTransaction(offre: OffreAnalysee, contexte: Contex
     await executer(`UPDATE job_offers SET last_seen_at = $2, last_checked_at = $2 WHERE id = $1`, [lie.id, maintenant], tx);
     return { type: 'doublon', id: cree!.id, reference: cree!.reference, statut, motif, doublonDe: { id: lie.id, reference: lie.reference, score: lie.score } };
   }
-  return { type: 'nouvelle', id: cree!.id, reference: cree!.reference, statut, motif, doublonProbable: probable ? { id: probable.id, reference: probable.reference, score: probable.score, titre: probable.titre } : null };
+  // La même annonce existait, mais publiée avant le début de la recherche : c'est elle qui est rattachée à la nouvelle.
+  let remplace: { id: string; reference: string } | null = null;
+  for (const ancienne of remplacees) {
+    const rattachee = await rattacherAncienne(ancienne, cree!, { score: ancienne.score, maintenant, acteur: contexte.acteur ?? null, tx });
+    if (rattachee) remplace ??= { id: ancienne.id, reference: ancienne.reference };
+  }
+  return {
+    type: 'nouvelle', id: cree!.id, reference: cree!.reference, statut, motif, remplace,
+    doublonProbable: probable ? { id: probable.id, reference: probable.reference, score: probable.score, titre: probable.titre } : null,
+  };
 }
 
 export async function enregistrerOffre(offre: OffreAnalysee, contexte: ContexteEnregistrement, tx?: Executeur): Promise<ResultatEnregistrement> {

@@ -12,6 +12,7 @@ import { reinitialiserCles } from '@/serveur/config';
 import { definirPool, executer, fermerPool } from '@/serveur/db';
 import { oublierParametres } from '@/serveur/parametres';
 import { synchroniserReferentiels } from '@/serveur/referentiel';
+import { DEBUT_RECHERCHE_TESTS } from '../parametres';
 
 export const MAINTENANT = new Date('2026-11-10T10:00:00Z');
 export const MOT_DE_PASSE = 'Essai-Solide-2026!';
@@ -35,11 +36,26 @@ export async function preparerBase(): Promise<Monde> {
   definirPool(new pg.Pool({ connectionString: inject('urlBase'), max: 4 }));
   await executer(`TRUNCATE ${TABLES.join(', ')} RESTART IDENTITY CASCADE`);
   await synchroniserReferentiels();
+  await epinglerDebutRecherche();
   const systeme: Acteur = { id: null, libelle: 'tests', role: null };
   const admin = await creerUtilisateur({ email: 'admin@yallah.example', nom: 'Administratrice Test', role: 'administrateur', motDePasse: MOT_DE_PASSE, doitChanger: false }, systeme);
   const courtier = await creerUtilisateur({ email: 'courtier@yallah.example', nom: 'Courtier Test', role: 'courtier', motDePasse: MOT_DE_PASSE, doitChanger: false }, systeme);
   const lecteur = await creerUtilisateur({ email: 'lecteur@yallah.example', nom: 'Lecteur Test', role: 'lecteur', motDePasse: MOT_DE_PASSE, doitChanger: false }, systeme);
   return { admin, courtier, lecteur, acteurAdmin: acteurDe(admin), acteurCourtier: acteurDe(courtier) };
+}
+
+/**
+ * Début de la recherche au 1er janvier 2026 (voir tests/parametres.ts) : les annonces d'essai, datées de début
+ * novembre 2026, restent dans la période quelle que soit la valeur par défaut. Écrit directement en base, sans
+ * passer par definirParametre : aucune ligne au journal d'audit, que plusieurs tests relisent.
+ */
+export async function epinglerDebutRecherche(): Promise<void> {
+  await executer(
+    `INSERT INTO app_settings (key, value, description) VALUES ('perimetre.dateMin', $1::jsonb, 'Épinglé par les tests')
+     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
+    [JSON.stringify(DEBUT_RECHERCHE_TESTS)],
+  );
+  oublierParametres();
 }
 
 export async function fermerBase(): Promise<void> {
