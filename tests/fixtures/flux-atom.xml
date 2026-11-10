@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>Flux Atom fictif</title>
+  <entry>
+    <title>Esthéticienne confirmée – Institut Exemple Agadir</title>
+    <link rel="alternate" href="https://emplois.example/offre/estheticienne-agadir/"/>
+    <id>tag:emplois.example,2026:2001</id>
+    <published>2026-11-05T10:00:00+01:00</published>
+    <summary type="html">&lt;p&gt;Institut de beauté à Agadir recrute une esthéticienne. Salaire 4500 dh.&lt;/p&gt;</summary>
+  </entry>
+</feed>

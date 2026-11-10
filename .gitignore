@@ -1,0 +1,33 @@
+# Dépendances
+/node_modules
+/.pnp
+.pnp.*
+
+# Next.js
+/.next/
+/out/
+/build
+next-env.d.ts
+*.tsbuildinfo
+
+# Tests
+/coverage
+
+# Données locales : jamais dans Git (même règle que le dépôt yallah.services,
+# qui exclut data/ et data-*/). Contient la base PostgreSQL embarquée et les
+# exports, donc potentiellement des données personnelles.
+/.data/
+/data/
+/data-*/
+/exports/
+
+# Secrets et environnement
+.env
+.env.*
+!.env.example
+*.pem
+
+# Divers
+.DS_Store
+npm-debug.log*
+.vercel
