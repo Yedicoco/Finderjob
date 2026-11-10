@@ -1,0 +1,48 @@
+{
+  "name": "yallah-services-job-radar",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Yallah Services Job Radar — veille, qualification et suivi des offres d'emploi au Maroc (personnel de maison, beauté, hospitalité).",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint",
+    "typecheck": "next typegen && tsc --noEmit",
+    "test": "vitest run",
+    "test:unitaires": "vitest run --project unitaires",
+    "test:integration": "vitest run --project integration",
+    "db:migrer": "tsx scripts/migrer.ts",
+    "db:initialiser": "tsx scripts/initialiser.ts",
+    "local": "tsx scripts/local.ts",
+    "local:dev": "tsx scripts/local.ts --dev",
+    "worker": "tsx scripts/worker.ts",
+    "worker:une-fois": "tsx scripts/worker.ts --une-fois",
+    "verifier": "tsx scripts/verifier-conformite.ts"
+  },
+  "dependencies": {
+    "fast-xml-parser": "5.12.0",
+    "next": "16.4.6",
+    "pg": "8.23.1",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@tailwindcss/turbopack": "4.3.3",
+    "@types/node": "^22",
+    "@types/pg": "^8",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "embedded-postgres": "17.11.0-beta.19",
+    "eslint": "^9",
+    "eslint-config-next": "16.4.6",
+    "tailwindcss": "4.3.3",
+    "tsx": "4.23.15",
+    "typescript": "^5",
+    "vitest": "5.1.0"
+  }
+}

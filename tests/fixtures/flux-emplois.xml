@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:content="http://purl.org/rss/1.0/modules/content/" xmlns:dc="http://purl.org/dc/elements/1.1/">
+  <channel>
+    <title>Emplois fictifs — jeu d'essai</title>
+    <link>https://emplois.example/</link>
+    <description>Flux de test, données inventées</description>
+    <item>
+      <title>Femme de ménage pour villa – Casablanca</title>
+      <link>https://emplois.example/offre/femme-de-menage-villa-casablanca/?utm_source=rss</link>
+      <guid isPermaLink="false">https://emplois.example/?p=1001</guid>
+      <pubDate>Mon, 09 Nov 2026 08:30:00 +0000</pubDate>
+      <dc:creator><![CDATA[Famille test]]></dc:creator>
+      <category><![CDATA[Services à la personne]]></category>
+      <description><![CDATA[<p>Famille à Casablanca (quartier Californie) cherche une <strong>femme de m&eacute;nage</strong> s&eacute;rieuse, CDI, temps plein. Salaire 4&nbsp;000 DH par mois. 2 ans d'exp&eacute;rience. Contact : 06 00 00 00 01</p>]]></description>
+    </item>
+    <item>
+      <title>Réceptionniste H/F – Riad Exemple Marrakech</title>
+      <link>https://emplois.example/offre/receptionniste-riad-exemple-marrakech/</link>
+      <guid isPermaLink="false">https://emplois.example/?p=1002</guid>
+      <pubDate>Sun, 08 Nov 2026 10:00:00 +0000</pubDate>
+      <description><![CDATA[Le Riad Exemple, médina de Marrakech, recrute un(e) réceptionniste. Français et anglais exigés. CDD saisonnier.]]></description>
+    </item>
+    <item>
+      <title>مطلوب عاملة نظافة بالرباط</title>
+      <link>https://emplois.example/offre/amila-nadafa-rabat/</link>
+      <guid isPermaLink="false">https://emplois.example/?p=1003</guid>
+      <pubDate>Sat, 07 Nov 2026 09:00:00 +0000</pubDate>
+      <description><![CDATA[عائلة بالرباط تبحث عن عاملة منزلية مع المبيت. الراتب 3500 درهم شهريا.]]></description>
+    </item>
+    <item>
+      <title>Nounou à Dubaï</title>
+      <link>https://emplois.example/offre/nounou-dubai/</link>
+      <guid isPermaLink="false">https://emplois.example/?p=1004</guid>
+      <pubDate>Sat, 07 Nov 2026 09:00:00 +0000</pubDate>
+      <description><![CDATA[Famille cherche nounou. Entretiens à Casablanca. Visa pris en charge.]]></description>
+    </item>
+    <item>
+      <title>Développeur PHP – Casablanca</title>
+      <link>https://emplois.example/offre/developpeur-php-casablanca/</link>
+      <guid isPermaLink="false">https://emplois.example/?p=1005</guid>
+      <pubDate>Fri, 06 Nov 2026 09:00:00 +0000</pubDate>
+      <description><![CDATA[Société de services informatiques recrute un développeur PHP confirmé.]]></description>
+    </item>
+    <item>
+      <title>Chauffeur privé – Rabat</title>
+      <link>https://emplois.example/offre/chauffeur-prive-rabat-2025/</link>
+      <guid isPermaLink="false">https://emplois.example/?p=0900</guid>
+      <pubDate>Mon, 15 Dec 2025 09:00:00 +0000</pubDate>
+      <description><![CDATA[Famille à Rabat cherche chauffeur privé avec permis de conduire.]]></description>
+    </item>
+    <item>
+      <title></title>
+      <link>https://emplois.example/offre/sans-titre/</link>
+    </item>
+  </channel>
+</rss>

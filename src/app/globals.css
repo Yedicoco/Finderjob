@@ -1,0 +1,210 @@
+@import 'tailwindcss';
+
+/*
+ * Charte Yallah Services (reprise du site public) : bleu marine, or, ivoire,
+ * vert. L'outil interne l'applique sur fond clair : c'est un écran de travail
+ * consulté plusieurs heures par jour.
+ */
+@theme {
+  --color-marine-950: #081726;
+  --color-marine-900: #0d2136;
+  --color-marine-800: #14304c;
+  --color-marine-700: #1b3d5e;
+  --color-marine-600: #2c5580;
+  --color-marine-500: #4a7099;
+  --color-marine-300: #9fb4c9;
+  --color-marine-200: #cdd7e2;
+  --color-marine-100: #e6ecf2;
+  --color-marine-50: #f3f6f9;
+
+  --color-or-700: #86691c;
+  --color-or-600: #a8842a;
+  --color-or-500: #c9a227;
+  --color-or-300: #e9d493;
+  --color-or-100: #f7efd2;
+  --color-or-50: #fcf8e9;
+
+  --color-sable-50: #fbf9f4;
+  --color-sable-100: #f5f1e6;
+  --color-sable-200: #e9e3d2;
+  --color-sable-300: #d8cfb8;
+  --color-sable-500: #8d846c;
+
+  --color-vert-800: #004c2b;
+  --color-vert-600: #08733d;
+  --color-vert-100: #d6efe1;
+  --color-vert-50: #ecf8f1;
+
+  --color-rouge-700: #9b0e19;
+  --color-rouge-600: #c1121f;
+  --color-rouge-100: #fbd9dc;
+  --color-rouge-50: #fdf0f1;
+
+  --color-ambre-800: #7a4b00;
+  --color-ambre-600: #b36b00;
+  --color-ambre-100: #fde9c4;
+  --color-ambre-50: #fff6e4;
+
+  --color-encre: #0d2136;
+  --color-encre-douce: #46586b;
+
+  --font-sans: var(--font-montserrat), var(--font-montserrat-etendu), var(--font-cairo), Arial, sans-serif;
+  --font-titre: var(--font-barlow), var(--font-barlow-etendu), 'Arial Narrow', var(--font-cairo), sans-serif;
+  --font-arabe: var(--font-cairo), var(--font-montserrat), Tahoma, sans-serif;
+
+  --shadow-carte: 0 1px 2px rgb(13 33 54 / 0.06), 0 6px 18px -10px rgb(13 33 54 / 0.18);
+}
+
+@layer base {
+  html {
+    color: var(--color-encre);
+    background: var(--color-sable-50);
+    font-size: 15px;
+    -webkit-text-size-adjust: 100%;
+  }
+  body {
+    min-height: 100dvh;
+    font-family: var(--font-sans);
+    line-height: 1.5;
+    font-feature-settings: 'tnum' 1;
+  }
+  /* Texte arabe : police Cairo, hauteur de ligne plus généreuse. */
+  :lang(ar),
+  [dir='rtl'] {
+    font-family: var(--font-arabe);
+    line-height: 1.8;
+  }
+  a {
+    color: inherit;
+  }
+  :focus-visible {
+    outline: 2px solid var(--color-or-500);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+  ::selection {
+    background: var(--color-or-300);
+    color: var(--color-marine-950);
+  }
+  input,
+  select,
+  textarea,
+  button {
+    font: inherit;
+  }
+  summary {
+    cursor: pointer;
+  }
+  summary::-webkit-details-marker {
+    display: none;
+  }
+  /*
+   * Triangle de dépliage dessiné en CSS : le même dans tous les navigateurs
+   * (Safari et Chrome n'affichent pas le leur de la même façon). Les résumés
+   * habillés en bouton (classe « list-none ») n'en ont pas.
+   */
+  summary:not(.list-none) {
+    list-style: none;
+  }
+  summary:not(.list-none)::before {
+    content: '';
+    display: inline-block;
+    width: 0;
+    height: 0;
+    margin-inline-end: 0.5em;
+    border-block: 0.32em solid transparent;
+    border-inline-start: 0.48em solid currentColor;
+    vertical-align: 0.04em;
+    transition: transform 0.15s;
+  }
+  details[open] > summary:not(.list-none)::before {
+    transform: rotate(90deg);
+  }
+  /*
+   * Un élément de grille peut toujours rétrécir : c'est son contenu (texte qui
+   * passe à la ligne, tableau qui défile) qui s'adapte à l'écran, jamais la page
+   * entière qui déborde sur un téléphone. Une classe « min-w-… » reste prioritaire.
+   */
+  :where(.grid) > * {
+    min-width: 0;
+  }
+}
+
+@utility titre {
+  font-family: var(--font-titre);
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  line-height: 1.05;
+}
+
+@utility chiffre {
+  font-family: var(--font-titre);
+  font-weight: 800;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+@utility champ {
+  width: 100%;
+  min-height: 2.6rem;
+  border-radius: 0.5rem;
+  border: 1px solid var(--color-sable-300);
+  background: #fff;
+  padding: 0.5rem 0.7rem;
+  color: var(--color-encre);
+  transition: border-color 120ms, box-shadow 120ms;
+  &::placeholder {
+    color: #8b97a5;
+  }
+  &:hover {
+    border-color: var(--color-marine-300);
+  }
+  &:focus {
+    outline: none;
+    border-color: var(--color-or-600);
+    box-shadow: 0 0 0 3px rgb(201 162 39 / 0.28);
+  }
+  &:disabled {
+    background: var(--color-sable-100);
+    color: var(--color-encre-douce);
+  }
+}
+
+@page {
+  margin: 14mm;
+}
+
+@media print {
+  html,
+  body {
+    background: #fff;
+    font-size: 12px;
+  }
+  .hors-impression {
+    display: none !important;
+  }
+  /* Une ligne de tableau, un élément de liste ou un titre ne se coupe pas entre deux pages. */
+  tr,
+  li,
+  figure {
+    break-inside: avoid;
+  }
+  h1,
+  h2,
+  h3 {
+    break-after: avoid;
+  }
+  /* Les liens restent du texte : pas de couleur ni de soulignement parasites sur papier. */
+  a {
+    text-decoration: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+    animation: none !important;
+    scroll-behavior: auto !important;
+  }
+}
