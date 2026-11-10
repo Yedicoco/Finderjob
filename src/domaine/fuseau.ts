@@ -1,13 +1,24 @@
 /**
  * Heure légale du Maroc.
  *
- * Le Maroc est à UTC+1 toute l'année, sauf pendant le ramadan où il repasse à
- * UTC+0. On ne code donc jamais « +01:00 » en dur pour une date saisie : le
- * décalage est lu dans la base des fuseaux (Africa/Casablanca) pour le jour
- * demandé. Fonctions pures.
+ * Depuis le 20 septembre 2026 à 2 h du matin, le Maroc est à l'heure GMT (UTC+0)
+ * toute l'année. D'octobre 2018 à cette date, il était à UTC+1, sauf pendant le
+ * ramadan où il repassait à UTC+0. On ne code donc jamais un décalage en dur
+ * pour une date saisie : il est calculé pour l'instant demandé.
+ *
+ * Le décalage est lu dans la base des fuseaux du moteur d'exécution
+ * (Africa/Casablanca). Une base antérieure à juillet 2026 (tzdata < 2026c)
+ * ignore le retour à GMT : dans ce cas seulement, la règle connue est appliquée
+ * ici. Une base à jour est suivie telle quelle — y compris si la règle change de
+ * nouveau. L'affichage passe par `instantVersHorlogeMaroc()` et jamais par
+ * l'option `timeZone` d'Intl, pour donner le même résultat sur tous les serveurs.
+ * Miroir SQL : ys_heure_maroc() (db/migrations/0003). Fonctions pures.
  */
 
 export const FUSEAU_MAROC = 'Africa/Casablanca';
+
+/** Retour à UTC+0 : le 20 septembre 2026 à 2 h (heure UTC+1), soit 1 h UTC. Source : base tz, version 2026c. */
+export const RETOUR_GMT_MS = Date.UTC(2026, 8, 20, 1, 0, 0);
 
 const horloge = new Intl.DateTimeFormat('en-CA', {
   timeZone: FUSEAU_MAROC,
@@ -20,12 +31,32 @@ const horloge = new Intl.DateTimeFormat('en-CA', {
   second: '2-digit',
 });
 
-/** Décalage (en ms) entre l'heure de Casablanca et UTC à l'instant donné. */
-export function decalageMaroc(instant: Date): number {
+/** Décalage (en ms) selon la base des fuseaux du moteur d'exécution, sans correction. */
+function decalageSelonBase(instant: Date): number {
   const p: Record<string, number> = {};
   for (const partie of horloge.formatToParts(instant)) if (partie.type !== 'literal') p[partie.type] = Number(partie.value);
   const affiche = Date.UTC(p.year ?? 0, (p.month ?? 1) - 1, p.day ?? 1, p.hour ?? 0, p.minute ?? 0, p.second ?? 0);
   return affiche - Math.floor(instant.getTime() / 1000) * 1000;
+}
+
+/** Vrai si la base des fuseaux du moteur d'exécution connaît le retour à GMT de septembre 2026. */
+export const baseFuseauxAJour: boolean = decalageSelonBase(new Date(Date.UTC(2026, 10, 10, 12))) === 0;
+
+/**
+ * Décalage (en ms) entre l'heure de Casablanca et UTC à l'instant donné.
+ * `baseAJour` n'est passé que par les tests, pour exercer les deux chemins.
+ */
+export function decalageMaroc(instant: Date, baseAJour: boolean = baseFuseauxAJour): number {
+  if (!baseAJour && instant.getTime() >= RETOUR_GMT_MS) return 0;
+  return decalageSelonBase(instant);
+}
+
+/**
+ * Date dont les champs UTC valent ce qu'affiche une horloge de Casablanca à
+ * l'instant donné. À mettre en forme avec `timeZone: 'UTC'`.
+ */
+export function instantVersHorlogeMaroc(instant: Date): Date {
+  return new Date(instant.getTime() + decalageMaroc(instant));
 }
 
 /**
@@ -56,10 +87,10 @@ export function horlogeMarocVersInstant(lueCommeUtc: Date): Date {
   return new Date(instant);
 }
 
-const jourEcrit = new Intl.DateTimeFormat('fr-FR', { timeZone: FUSEAU_MAROC, day: 'numeric', month: 'long', year: 'numeric' });
+const jourEcrit = new Intl.DateTimeFormat('fr-FR', { timeZone: 'UTC', day: 'numeric', month: 'long', year: 'numeric' });
 
 /** « 10 novembre 2026 » : le jour de Casablanca, écrit en toutes lettres. */
-export const jourEcritMaroc = (instant: Date): string => jourEcrit.format(instant);
+export const jourEcritMaroc = (instant: Date): string => jourEcrit.format(instantVersHorlogeMaroc(instant));
 
 const JOUR_SEUL = /^(\d{4})-(\d{2})-(\d{2})$/;
 

@@ -221,8 +221,8 @@ const MOIS: Record<string, number> = {
 const NOMS_MOIS = Object.keys(MOIS).sort((a, b) => b.length - a.length).join('|');
 
 /**
- * Date « jour seul » : midi à Casablanca. Le Maroc est à UTC+1, sauf pendant le
- * ramadan (UTC+0) : 11 h UTC tombe le bon jour dans les deux cas.
+ * Date « jour seul » : placée à 11 h UTC, en milieu de journée à Casablanca que
+ * le Maroc soit à UTC+0 ou à UTC+1 : le jour civil est le bon dans les deux cas.
  */
 function dateLocale(annee: number, mois: number, jour: number): Date | null {
   if (annee < 2000 || annee > 2100 || mois < 1 || mois > 12 || jour < 1 || jour > 31) return null;
@@ -237,7 +237,7 @@ export function lireDate(brut: string | null | undefined): Date | null {
   let m = /(\d{4})-(\d{2})-(\d{2})(?:[t ](\d{2}):(\d{2})(?::(\d{2}))?(?:\.\d+)?\s*(z|[+-]\d{2}:?\d{2})?)?/.exec(texte);
   if (m) {
     if (m[4] !== undefined) {
-      // Sans fuseau écrit, l'heure est celle de Casablanca (UTC+1, UTC+0 pendant le ramadan).
+      // Sans fuseau écrit, l'heure est celle de Casablanca (décalage calculé pour ce jour-là).
       if (!m[7]) return instantMaroc(Number(m[1]), Number(m[2]), Number(m[3]), Number(m[4]), Number(m[5]), Number(m[6] ?? '0'));
       const decalage = m[7] === 'z' ? 'Z' : m[7].includes(':') ? m[7] : `${m[7].slice(0, 3)}:${m[7].slice(3)}`;
       const date = new Date(`${m[1]}-${m[2]}-${m[3]}T${m[4]}:${m[5]}:${m[6] ?? '00'}${decalage}`);

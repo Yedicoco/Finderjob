@@ -20,7 +20,7 @@ Un outil interne pour Yallah Services, intermédiaire de placement à Casablanca
 | Langue | Interface en français ; annonces lues en français, arabe et anglais. | — |
 | Périmètre | Maroc uniquement ; offres publiées à partir du 1er janvier 2026. La date peut être resserrée, jamais avancée. | Administration › Paramètres |
 | Validité d'une offre | 45 jours après publication, sauf date limite écrite dans l'annonce. | Paramètre « durée de validité » |
-| Heure | Toutes les dates sont lues et affichées à l'heure légale du Maroc (UTC+1, UTC+0 pendant le ramadan). | `src/domaine/fuseau.ts` |
+| Heure | Toutes les dates sont lues et affichées à l'heure légale du Maroc : GMT (UTC+0) toute l'année depuis le 20 septembre 2026 ; auparavant UTC+1, et UTC+0 pendant le ramadan. | `src/domaine/fuseau.ts` |
 | Formules | Premium 1 000 DH (remplacement 6 mois) et Sérénité 500 DH (2 mois), reprises du dépôt du site public. | `src/domaine/parametres.ts` |
 | Conservation | Fiches candidats anonymisées 12 mois après la dernière activité. | Paramètre « conservation » |
 | Hébergement | Une application Node.js et une base PostgreSQL. | [04](04-architecture-technique.md) |

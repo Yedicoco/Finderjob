@@ -1,8 +1,10 @@
 /**
- * Connexion, sessions, droits par rôle, journal d'audit, paramètres et reprise
- * d'une source : les garde-fous qui ne dépendent d'aucun écran.
+ * Connexion, sessions, droits par rôle, journal d'audit, paramètres, heure
+ * légale côté base et reprise d'une source : les garde-fous qui ne dépendent
+ * d'aucun écran.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { instantVersHorlogeMaroc, RETOUR_GMT_MS } from '@/domaine/fuseau';
 import { changerMotDePasse, connecter, creerUtilisateur, ErreurAcces, modifierUtilisateur, peut, utilisateurDeSession } from '@/serveur/auth';
 import { executer, requete, uneLigne } from '@/serveur/db';
 import { executerCollecte, reprendreSource } from '@/serveur/ingestion';
@@ -153,9 +155,12 @@ describe('paramètres', () => {
   it('place la date de début du périmètre à minuit, heure du Maroc, et ne l’avance jamais avant 2026', async () => {
     await definirParametre('perimetre.dateMin', '2026-02-15', monde.acteurAdmin);
     expect(new Date((await chargerParametres()).perimetre.dateMin).toISOString()).toBe('2026-02-14T23:00:00.000Z');
-    // Pendant le ramadan le Maroc repasse à UTC+0 : minuit à Casablanca vaut minuit UTC.
+    // Pendant le ramadan 2026, le Maroc était à UTC+0 : minuit à Casablanca valait minuit UTC.
     await definirParametre('perimetre.dateMin', '2026-03-01', monde.acteurAdmin);
     expect(new Date((await chargerParametres()).perimetre.dateMin).toISOString()).toBe('2026-03-01T00:00:00.000Z');
+    // Depuis le 20 septembre 2026, le Maroc est à l'heure GMT toute l'année.
+    await definirParametre('perimetre.dateMin', '2026-10-01', monde.acteurAdmin);
+    expect(new Date((await chargerParametres()).perimetre.dateMin).toISOString()).toBe('2026-10-01T00:00:00.000Z');
     await expect(definirParametre('perimetre.dateMin', '15/02/2026', monde.acteurAdmin)).rejects.toThrow('Date invalide.');
     await expect(definirParametre('perimetre.dateMin', '2025-12-31', monde.acteurAdmin)).rejects.toThrow(/avant le 1er janvier 2026/);
     await definirParametre('perimetre.dateMin', '2026-01-01', monde.acteurAdmin);
@@ -179,6 +184,34 @@ describe('paramètres', () => {
     expect((await chargerParametres()).commissions.travailleurActive).toBe(true);
     await definirParametre('commissions.travailleur_active', '', monde.acteurAdmin);
     expect((await chargerParametres()).commissions.travailleurActive).toBe(false);
+  });
+});
+
+describe('heure légale du Maroc côté base', () => {
+  const lire = async (instant: Date): Promise<string> =>
+    (await uneLigne<{ h: string }>(`SELECT to_char(ys_heure_maroc($1::timestamptz), 'YYYY-MM-DD HH24:MI:SS') AS h`, [instant.toISOString()]))!.h;
+
+  it('revient à GMT le 20 septembre 2026, que la base des fuseaux du serveur soit ancienne ou à jour', async () => {
+    expect(await lire(new Date('2026-07-10T12:00:00Z'))).toBe('2026-07-10 13:00:00');
+    expect(await lire(new Date('2026-03-10T12:00:00Z'))).toBe('2026-03-10 12:00:00');
+    expect(await lire(new Date(RETOUR_GMT_MS - 1000))).toBe('2026-09-20 01:59:59');
+    expect(await lire(new Date(RETOUR_GMT_MS))).toBe('2026-09-20 01:00:00');
+    expect(await lire(new Date('2026-11-10T12:00:00Z'))).toBe('2026-11-10 12:00:00');
+    expect(await lire(new Date('2026-11-10T23:30:00Z'))).toBe('2026-11-10 23:30:00');
+  });
+
+  it('donne la même heure que l’application', async () => {
+    for (const texte of ['2026-01-01T00:30:00Z', '2026-02-14T23:30:00Z', '2026-02-15T03:30:00Z', '2026-03-22T00:30:00Z', '2026-03-22T02:30:00Z', '2026-06-30T23:45:00Z', '2026-09-19T23:59:59Z', '2026-09-20T00:59:59Z', '2026-09-20T01:00:00Z', '2026-10-31T23:15:00Z', '2026-11-10T10:00:00Z']) {
+      const instant = new Date(texte);
+      expect(await lire(instant), texte).toBe(instantVersHorlogeMaroc(instant).toISOString().slice(0, 19).replace('T', ' '));
+    }
+  });
+
+  it('numérote dans l’année en cours au Maroc', async () => {
+    const annee = instantVersHorlogeMaroc(new Date()).getUTCFullYear();
+    const reference = (await uneLigne<{ r: string }>(`SELECT ys_next_reference('ESSAI') AS r`))!.r;
+    expect(reference).toBe(`YS-ESSAI-${annee}-0001`);
+    await executer(`DELETE FROM counters WHERE scope = 'ESSAI'`);
   });
 });
 

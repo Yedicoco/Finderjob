@@ -25,7 +25,8 @@ externe, pas de stockage de fichiers.
 ## Organisation du code
 
 ```
-db/migrations/        schéma SQL (0001 tables et contraintes, 0002 recherche et statut effectif)
+db/migrations/        schéma SQL (0001 tables et contraintes, 0002 recherche et statut effectif,
+                      0003 heure légale du Maroc)
 src/domaine/          règles métier PURES : classification, extraction, risque, statuts, scores,
                       doublons, rapprochement, commissions, alertes, heure du Maroc…
 src/collecte/         client HTTP « poli », robots.txt, connecteurs RSS / sitemap / fichier / saisie,
@@ -88,3 +89,8 @@ ne jamais l'activer en production.
   démonstration (`YS-DEMO-…`), qui ne consomme donc aucun numéro réel.
 - **Pas de préchargement des liens** : chaque consultation d'une fiche candidat est journalisée, une page ne
   doit donc être demandée que lorsqu'on clique.
+- **Heure légale calculée par l'outil** : le Maroc est revenu à l'heure GMT le 20 septembre 2026. Un Node.js
+  ou un PostgreSQL dont la base des fuseaux date d'avant juillet 2026 l'ignore et afficherait une heure de
+  trop. `src/domaine/fuseau.ts` et la fonction SQL `ys_heure_maroc()` appliquent donc cette règle quand la
+  base du serveur est ancienne, et suivent la base quand elle est à jour. Un changement d'heure ultérieur
+  demanderait, lui, de mettre à jour Node.js et PostgreSQL.

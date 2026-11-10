@@ -1,7 +1,8 @@
 # 05 — Modèle de données
 
-Le schéma est dans `db/migrations/` : `0001_schema_initial.sql` (32 tables) et
-`0002_recherche_et_statut_effectif.sql` (recherche plein texte, vue `v_job_offers`).
+Le schéma est dans `db/migrations/` : `0001_schema_initial.sql` (32 tables),
+`0002_recherche_et_statut_effectif.sql` (recherche plein texte, vue `v_job_offers`) et
+`0003_heure_legale_maroc.sql` (fonction `ys_heure_maroc`).
 
 ## Les tables par domaine
 
@@ -32,6 +33,9 @@ Ces règles s'appliquent même à une requête SQL écrite à la main.
 - **Journal non modifiable.** Un déclencheur refuse toute modification ou suppression dans `audit_logs`.
 - **Numérotation.** `ys_next_reference(série)` délivre des numéros uniques qui se suivent, par série et par
   année ; les séries `DEMO-…` sont séparées.
+- **Heure légale.** `ys_heure_maroc(instant)` donne la date et l'heure de Casablanca. Les requêtes
+  l'utilisent à la place de `AT TIME ZONE 'Africa/Casablanca'`, qui dépend de la base des fuseaux du
+  serveur ; un test vérifie qu'elle donne la même heure que l'application.
 - **Valeurs fermées.** Statuts, types de contrat, modes de collecte, moyens de paiement sont limités par des
   contraintes `CHECK`, alignées sur les référentiels du code.
 - **Aucun mineur.** Une fiche candidat dont l'âge déclaré est inférieur à 18 ans est refusée.

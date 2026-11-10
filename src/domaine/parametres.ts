@@ -24,7 +24,7 @@ export const SMIG_HORAIRE_2026 = 17.92;
 export type Parametres = {
   perimetre: {
     pays: 'MA';
-    /** Début du périmètre : 1er janvier 2026 à 00 h 00, heure de Casablanca (UTC+1). */
+    /** Début du périmètre : 1er janvier 2026 à 00 h 00, heure de Casablanca (le Maroc était alors à UTC+1). */
     dateMin: string;
     fuseau: 'Africa/Casablanca';
   };

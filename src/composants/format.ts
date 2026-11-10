@@ -1,14 +1,15 @@
 /** Mise en forme partagée (français, heure de Casablanca). Fonctions pures. */
 import { accord } from '@/domaine/accord';
+import { instantVersHorlogeMaroc } from '@/domaine/fuseau';
 
-const FUSEAU = 'Africa/Casablanca';
 const JOUR_MS = 86_400_000;
 
-const fmtDate = new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'short', year: 'numeric', timeZone: FUSEAU });
-const fmtDateLongue = new Intl.DateTimeFormat('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: FUSEAU });
-const fmtHeure = new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: FUSEAU });
+// L'heure de Casablanca est calculée par domaine/fuseau (qui connaît le retour du Maroc à GMT en
+// septembre 2026 même si la base des fuseaux du serveur est ancienne), puis écrite « en UTC ».
+const fmtDate = new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
+const fmtDateLongue = new Intl.DateTimeFormat('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
+const fmtHeure = new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'UTC' });
 const fmtNombre = new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 });
-const fmtIso = new Intl.DateTimeFormat('en-CA', { year: 'numeric', month: '2-digit', day: '2-digit', timeZone: FUSEAU });
 
 type DateEntree = Date | string | null | undefined;
 
@@ -21,20 +22,20 @@ function versDate(valeur: DateEntree): Date | null {
 
 export const dateCourte = (valeur: DateEntree): string => {
   const date = versDate(valeur);
-  return date ? fmtDate.format(date) : '—';
+  return date ? fmtDate.format(instantVersHorlogeMaroc(date)) : '—';
 };
 export const dateLongue = (valeur: DateEntree): string => {
   const date = versDate(valeur);
-  return date ? fmtDateLongue.format(date) : '—';
+  return date ? fmtDateLongue.format(instantVersHorlogeMaroc(date)) : '—';
 };
 export const dateHeure = (valeur: DateEntree): string => {
   const date = versDate(valeur);
-  return date ? fmtHeure.format(date).replace(':', ' h ') : '—';
+  return date ? fmtHeure.format(instantVersHorlogeMaroc(date)).replace(':', ' h ') : '—';
 };
 /** Valeur d'un <input type="date"> (jour de Casablanca). */
 export const dateIso = (valeur: DateEntree): string => {
   const date = versDate(valeur);
-  return date ? fmtIso.format(date) : '';
+  return date ? instantVersHorlogeMaroc(date).toISOString().slice(0, 10) : '';
 };
 
 export const nombre = (valeur: number | null | undefined): string => (valeur === null || valeur === undefined ? '—' : fmtNombre.format(valeur));

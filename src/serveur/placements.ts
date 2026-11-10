@@ -274,8 +274,9 @@ export async function listerCommissions(filtres: { statut?: string; payeur?: str
   if (filtres.statut) conditions.push(`co.status = ${p(filtres.statut)}`);
   if (filtres.payeur) conditions.push(`co.payer = ${p(filtres.payeur)}`);
   if (filtres.placement) conditions.push(`co.placement_id = ${p(filtres.placement)}`);
-  if (filtres.depuis) conditions.push(`co.created_at >= ${p(filtres.depuis)}::date`);
-  if (filtres.jusque) conditions.push(`co.created_at < ${p(filtres.jusque)}::date + 1`);
+  // Jours civils du Maroc : le résultat ne dépend pas du fuseau réglé sur le serveur de base de données.
+  if (filtres.depuis) conditions.push(`ys_heure_maroc(co.created_at)::date >= ${p(filtres.depuis)}::date`);
+  if (filtres.jusque) conditions.push(`ys_heure_maroc(co.created_at)::date <= ${p(filtres.jusque)}::date`);
   return requete<Commission>(`${SELECT_COMMISSION} ${conditions.length ? `WHERE ${conditions.join(' AND ')}` : ''} ORDER BY co.created_at DESC LIMIT 500`, valeurs);
 }
 

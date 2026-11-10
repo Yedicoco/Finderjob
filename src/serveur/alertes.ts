@@ -190,7 +190,7 @@ export async function traiterAlertes(options: { maintenant?: Date; transport?: T
 export async function notifierRelances(maintenant = new Date()): Promise<number> {
   return executer(
     `INSERT INTO notifications (user_id, kind, channel, status, title, body, payload, sent_at)
-     SELECT COALESCE(e.assigned_to, e.created_by), 'relance', 'interne', 'envoye', 'Relance à faire : ' || e.name, 'Relance prévue le ' || to_char(e.next_follow_up_at AT TIME ZONE 'Africa/Casablanca', 'DD/MM/YYYY'),
+     SELECT COALESCE(e.assigned_to, e.created_by), 'relance', 'interne', 'envoye', 'Relance à faire : ' || e.name, 'Relance prévue le ' || to_char(ys_heure_maroc(e.next_follow_up_at), 'DD/MM/YYYY'),
             jsonb_build_object('employeur', e.id::text, 'reference', e.reference), $1
        FROM employers e JOIN users u ON u.id = COALESCE(e.assigned_to, e.created_by) AND u.is_active
       WHERE e.next_follow_up_at <= $1 AND NOT e.do_not_contact AND e.status <> 'cloture'

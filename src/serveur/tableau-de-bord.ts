@@ -52,8 +52,8 @@ export async function tableauDeBord(): Promise<TableauDeBord> {
     ),
     requete<{ jour: string; n: number }>(
       `SELECT to_char(j, 'YYYY-MM-DD') AS jour, count(o.id)::int AS n
-         FROM generate_series((now() AT TIME ZONE 'Africa/Casablanca')::date - 29, (now() AT TIME ZONE 'Africa/Casablanca')::date, interval '1 day') AS j
-         LEFT JOIN job_offers o ON (o.first_seen_at AT TIME ZONE 'Africa/Casablanca')::date = j::date
+         FROM generate_series(ys_heure_maroc(now())::date - 29, ys_heure_maroc(now())::date, interval '1 day') AS j
+         LEFT JOIN job_offers o ON ys_heure_maroc(o.first_seen_at)::date = j::date
         GROUP BY j ORDER BY j`,
     ),
     // « Actives » = sources collectées AUTOMATIQUEMENT ; les entrées internes (saisie, annonce confiée, fichier) ne sont pas de la collecte.
@@ -70,7 +70,7 @@ export async function tableauDeBord(): Promise<TableauDeBord> {
       `SELECT count(*) FILTER (WHERE anonymized_at IS NULL)::int AS total,
               count(*) FILTER (WHERE anonymized_at IS NULL AND status IN ('nouveau', 'contacte', 'entretien', 'propose'))::int AS disponibles,
               count(*) FILTER (WHERE status = 'place')::int AS places,
-              count(*) FILTER (WHERE anonymized_at IS NULL AND status <> 'place' AND retention_until < (now() + interval '30 days')::date)::int AS fin
+              count(*) FILTER (WHERE anonymized_at IS NULL AND status <> 'place' AND retention_until < ys_heure_maroc(now())::date + 30)::int AS fin
          FROM candidates`,
     ),
     requete<{ statut: string; n: number }>(`SELECT status AS statut, count(*)::int AS n FROM candidates WHERE anonymized_at IS NULL GROUP BY 1`),
@@ -83,7 +83,7 @@ export async function tableauDeBord(): Promise<TableauDeBord> {
     uneLigne<{ total: number; en_cours: number }>(`SELECT count(*) FILTER (WHERE status <> 'annule')::int AS total, count(*) FILTER (WHERE status IN ('en_cours', 'confirme'))::int AS en_cours FROM placements`),
     requete<{ mois: string; n: number }>(
       `SELECT to_char(m, 'YYYY-MM') AS mois, count(p.id)::int AS n
-         FROM generate_series(date_trunc('month', now()) - interval '5 months', date_trunc('month', now()), interval '1 month') AS m
+         FROM generate_series(date_trunc('month', ys_heure_maroc(now())) - interval '5 months', date_trunc('month', ys_heure_maroc(now())), interval '1 month') AS m
          LEFT JOIN placements p ON date_trunc('month', p.start_date::timestamp) = m::timestamp AND p.status <> 'annule'
         GROUP BY m ORDER BY m`,
     ),

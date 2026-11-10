@@ -10,6 +10,7 @@ import { executerMaintenance, figerStatuts } from '@/serveur/maintenance';
 import { offreParId, rechercherOffres } from '@/serveur/offres';
 import { definirParametre, oublierParametres } from '@/serveur/parametres';
 import { changerStatutCommission, changerStatutPlacement, commissionParId, creerCommission, creerPlacement, listerCommissions, totauxCommissions } from '@/serveur/placements';
+import { dateIso } from '@/composants/format';
 import { tableauDeBord } from '@/serveur/tableau-de-bord';
 import { fermerBase, MAINTENANT, preparerBase, type Monde } from './outils';
 
@@ -195,6 +196,29 @@ describe('placements et commissions', () => {
     oublierParametres();
   });
 
+  it('filtre les commissions par jour de création, à l’heure du Maroc', async () => {
+    const [commission] = await listerCommissions({ payeur: 'employeur' });
+    const JOUR = 86_400_000;
+    const jour = dateIso(commission!.created_at);
+    const veille = dateIso(new Date(commission!.created_at.getTime() - JOUR));
+    const lendemain = dateIso(new Date(commission!.created_at.getTime() + JOUR));
+    const ids = async (filtres: { depuis?: string; jusque?: string }) => (await listerCommissions(filtres)).map((ligne) => ligne.id);
+    expect(await ids({ depuis: jour, jusque: jour })).toContain(commission!.id);
+    expect(await ids({ depuis: veille, jusque: lendemain })).toContain(commission!.id);
+    expect(await ids({ depuis: lendemain })).not.toContain(commission!.id);
+    expect(await ids({ jusque: veille })).not.toContain(commission!.id);
+    // Une commission créée à 23 h 30 (heure du Maroc) reste dans sa journée, pas dans la suivante.
+    await executer(`UPDATE commissions SET created_at = '2026-11-09T23:30:00Z' WHERE id = $1`, [commission!.id]);
+    expect(await ids({ depuis: '2026-11-09', jusque: '2026-11-09' })).toContain(commission!.id);
+    expect(await ids({ depuis: '2026-11-10' })).not.toContain(commission!.id);
+    // Avant le retour à GMT (UTC+1), 23 h 30 UTC tombait déjà le lendemain à Casablanca.
+    await executer(`UPDATE commissions SET created_at = '2026-07-09T23:30:00Z' WHERE id = $1`, [commission!.id]);
+    expect(await ids({ depuis: '2026-07-10', jusque: '2026-07-10' })).toContain(commission!.id);
+    expect(await ids({ jusque: '2026-07-09' })).not.toContain(commission!.id);
+    await executer(`UPDATE commissions SET created_at = $2 WHERE id = $1`, [commission!.id, commission!.created_at]);
+    expect((await commissionParId(commission!.id))!.created_at.getTime()).toBe(commission!.created_at.getTime());
+  });
+
   it('suit le cycle dû → facturé → encaissé et numérote le reçu', async () => {
     const [commission] = await listerCommissions({ payeur: 'employeur' });
     await expect(changerStatutCommission(commission!.id, 'encaisse', {}, monde.acteurCourtier, MAINTENANT)).rejects.toThrow(/moyen de paiement/);
@@ -303,6 +327,12 @@ describe('maintenance et tableau de bord', () => {
     expect(t.commissions.encaisse).toBe(1000);
     expect(t.parJour).toHaveLength(30);
     expect(t.placements.parMois).toHaveLength(6);
+    // Le dernier jour et le dernier mois sont ceux du Maroc (l'instant est lu juste avant et juste après).
+    const avant = dateIso(new Date());
+    const relu = await tableauDeBord();
+    const apres = dateIso(new Date());
+    expect([avant, apres]).toContain(relu.parJour.at(-1)!.jour);
+    expect([avant.slice(0, 7), apres.slice(0, 7)]).toContain(relu.placements.parMois.at(-1)!.mois);
   });
 });
 

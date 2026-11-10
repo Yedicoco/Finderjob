@@ -18,7 +18,7 @@ simulées à partir des fichiers de `tests/fixtures/`.
 
 ## Résultat au 10 novembre 2026
 
-**341 tests, tous réussis** : 266 unitaires (14 fichiers) et 75 d'intégration (3 fichiers). Types et lint
+**350 tests, tous réussis** : 271 unitaires (14 fichiers) et 79 d'intégration (3 fichiers). Types et lint
 sans erreur.
 
 ### Tests unitaires
@@ -33,9 +33,9 @@ sans erreur.
 | `collecte` | 23 | `robots.txt` (RFC 9309), flux RSS et Atom, sitemaps, données structurées, fichiers CSV et JSON |
 | `appariement-commissions-alertes` | 23 | Score de rapprochement, bloquants, permis compté une fois, calcul et statuts des commissions, critères d'alerte |
 | `scores-doublons` | 19 | Fraîcheur, qualité, pertinence, indice de placement, doublons exacts, proches et bilingues |
+| `fuseau` | 12 | Heure légale du Maroc : retour à GMT du 20 septembre 2026, ramadan 2026, même résultat que la base des fuseaux du serveur soit ancienne ou à jour ; dates saisies et dates affichées |
 | `texte` | 9 | Normalisation du français et de l'arabe, conversion du HTML en texte, similarité |
 | `ia` | 8 | Réponse du modèle validée, valeurs hors référentiel écartées, tentative d'injection sans effet |
-| `fuseau` | 7 | Heure légale du Maroc, y compris pendant le ramadan |
 | `csv` | 5 | Export : neutralisation des formules de tableur, guillemets, format lisible par un tableur |
 | `accord` | 4 | Accords singulier et pluriel |
 | `referentiels` | 3 | Codes reconnus ou refusés, libellés |
@@ -45,8 +45,8 @@ sans erreur.
 | Fichier | Tests | Ce qui est vérifié |
 | --- | --- | --- |
 | `ingestion` | 26 | Collecte de bout en bout sur un site fictif ; activation d'une source refusée sans base juridique ; mise en pause sur refus ; recherche en français, arabe et anglais ; doublons ; versions ; rejets motivés ; statut effectif identique en SQL et dans le code ; imports manuels et par fichier |
-| `crm` | 32 | Candidats (consentement, refus des mineurs, chiffrement, anonymisation), employeurs, besoins, rapprochements, placements, commissions et reçus, alertes, maintenance, jeu de démonstration séparé des données réelles |
-| `securite` | 17 | Connexion, limite de tentatives, fermeture des sessions, dernier administrateur, droits par rôle, journal non modifiable et sans donnée personnelle, validation des paramètres, reprise d'une source en pause |
+| `crm` | 33 | Candidats (consentement, refus des mineurs, chiffrement, anonymisation), employeurs, besoins, rapprochements, placements, commissions et reçus (filtre par jour à l'heure du Maroc), alertes, maintenance, jeu de démonstration séparé des données réelles |
+| `securite` | 20 | Connexion, limite de tentatives, fermeture des sessions, dernier administrateur, droits par rôle, journal non modifiable et sans donnée personnelle, validation des paramètres, heure légale identique dans la base et dans l'application, reprise d'une source en pause |
 
 ## Vérifications manuelles faites
 
@@ -62,6 +62,15 @@ des saisies d'essai.
   360, 390, 768 et 1024 px ; impression du reçu sur une page A4 et du tableau de bord ; chargement et
   suppression du jeu de démonstration par clic, avec confirmation.
 - **Scripts** : `npm run verifier` et `npm run worker:une-fois` sur la base locale.
+- **Heure légale** : suite complète rejouée avec deux versions de Node.js — 22.22.3, dont la base des
+  fuseaux (2026a) ignore le retour du Maroc à GMT, et 22.23.4, dont la base (2026e) le connaît — et tests
+  d'intégration rejoués sur deux versions de PostgreSQL — 17.9 (base ancienne) et 17.11 (base à jour).
+  Mêmes résultats dans les quatre cas.
+- **Intégration continue** (`.github/workflows/ci.yml`) : exécutée par GitHub à chaque mise à jour d'une
+  demande de fusion ; le résultat se lit dans l'onglet « Actions » du dépôt. La première exécution
+  (demande n° 1) s'est arrêtée sur deux tests d'heure légale : le Node.js de GitHub connaissait le retour à
+  GMT, pas celui du poste de développement, et les tests attendaient encore UTC+1. C'est ce qui a fait
+  corriger l'outil.
 
 ## Ce qui n'a pas été vérifié
 
@@ -70,7 +79,7 @@ des saisies d'essai.
 | Collecte sur les sites réels | Jamais exécutée : sources désactivées, sites inaccessibles depuis l'environnement de développement. Seul le site fictif des tests a été collecté. |
 | Extraction par IA | Testée avec un modèle simulé uniquement. |
 | Envoi d'e-mails et de messages WhatsApp | Aucun fournisseur configuré : les envois sont enregistrés comme « simulés ». |
-| Intégration continue (`.github/workflows/ci.yml`) | Fichier fourni, jamais exécuté sur GitHub. |
+| Heure légale du Maroc | Le retour à GMT du 20 septembre 2026 est tiré de la base internationale des fuseaux horaires (IANA, version 2026c de juillet 2026), qui cite le décret n° 2.26.530 ; le texte du décret n'a pas été lu. Un changement d'heure ultérieur demanderait de mettre à jour Node.js et PostgreSQL. |
 | Charge | Aucun test de volume ; l'outil est conçu pour une petite équipe et quelques milliers d'offres. |
 | Navigateurs | Chromium uniquement ; ni Safari ni Firefox. |
 | Accessibilité | Structure, libellés et contrastes soignés, mais aucun audit avec lecteur d'écran. |
