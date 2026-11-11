@@ -76,6 +76,13 @@ des saisies d'essai.
   prend sa place ; un doublon probable dont l'autre annonce est passée avant le début annonce, avant la
   confirmation, que le rattachement se fera dans l'autre sens ; l'historique des offres et le journal gardent
   la trace de chaque étape.
+- **Début de la recherche, dans un navigateur** (11 novembre 2026, Chromium 153, installation neuve) : les
+  mêmes étapes rejouées par clic et saisie au clavier sur les paramètres, la fiche d'une offre et l'import.
+  Le navigateur refuse de lui-même une date future ou antérieure au 1er janvier 2026, avant tout envoi ;
+  chaque enregistrement affiche sa confirmation ; la question posée avant de rattacher un doublon annonce le
+  bon sens. Affichage relu à 1366 px et à 390 px : aucun défilement horizontal, aucune erreur dans la
+  console. Le navigateur vient du paquet npm `@sparticuz/chromium`, piloté par `puppeteer-core`, tous deux
+  installés hors du dépôt.
 - **Heure légale** : suite complète rejouée avec deux versions de Node.js — 22.22.3, dont la base des
   fuseaux (2026a) ignore le retour du Maroc à GMT, et 22.23.4, dont la base (2026e) le connaît — et tests
   d'intégration rejoués sur deux versions de PostgreSQL — 17.9 (base ancienne) et 17.11 (base à jour).
@@ -95,7 +102,7 @@ des saisies d'essai.
 | Envoi d'e-mails et de messages WhatsApp | Aucun fournisseur configuré : les envois sont enregistrés comme « simulés ». |
 | Heure légale du Maroc | Le retour à GMT du 20 septembre 2026 est tiré de la base internationale des fuseaux horaires (IANA, version 2026c de juillet 2026), qui cite le décret n° 2.26.530 ; le texte du décret n'a pas été lu. Un changement d'heure ultérieur demanderait de mettre à jour Node.js et PostgreSQL. |
 | Charge | Aucun test de volume ; l'outil est conçu pour une petite équipe et quelques milliers d'offres. |
-| Navigateurs | Chromium uniquement ; ni Safari ni Firefox. Les écrans modifiés pour le début de la recherche (paramètres, fiche d'une offre, import) n'ont pas été rouverts dans un navigateur : seules les pages rendues par le serveur ont été relues, et leurs formulaires envoyés sans JavaScript. |
+| Navigateurs | Chromium uniquement ; ni Safari ni Firefox. |
 | Accessibilité | Structure, libellés et contrastes soignés, mais aucun audit avec lecteur d'écran. |
 | Dépendances | `npm audit --omit=dev` : aucune alerte sur les dépendances de production. `npm audit` complet : 8 alertes de niveau modéré, sur des outils de développement. |
 
